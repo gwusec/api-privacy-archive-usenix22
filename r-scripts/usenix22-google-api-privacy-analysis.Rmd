@@ -1,0 +1,2574 @@
+---
+title: "Security and Privacy Perceptions of Third-Party Application Access for Google Accounts (USENIX Security 2022)"
+author: "David G. Balash, Xiaoyuan Wu, Miles Grant, Irwin Reyes, and Adam J. Aviv"
+output: html_document
+knit: (function(input_file, encoding) {
+  out_dir <- './docs';
+  rmarkdown::render(input_file,
+ encoding=encoding,
+ output_file=file.path(dirname(input_file), out_dir, 'usenix22-google-api-privacy-analysis.html'))})
+---
+
+```{r setup, include=FALSE}
+library(ordinal)
+library(MASS)
+library(tidyverse)
+library(ggalluvial)
+library(ggrepel)
+library(ggfittext)
+library(cowplot)
+library(scales)
+library(lubridate)
+library(broom)
+library(xtable)
+library(rstatix)
+library(car)
+library(patchwork)
+
+# Create output directories if not existing
+dir.create(file.path("./tables/"), showWarnings = FALSE)
+dir.create(file.path("./figures/"), showWarnings = FALSE)
+
+# Define factor levels of categorical data
+factorLevels <- list(
+  #############################################################################
+  accountAge = c("More than 10 years", "Less than or about 10 years", "Less than or about 5 years", "Less than or about 1 year", "Less than 1 month", "Unsure"),
+  age = c("18 - 24", "25 - 34", "35 - 44", "45 - 54", "55 - 64", "65 or older", "Prefer not to disclose"),
+  agreement = c("Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"),
+  agreementIUIPC = c("Strongly disagree", "Somewhat disagree", "Disagree", "Neither agree nor disagree", "Somewhat agree", "Agree", "Strongly agree"),
+  appropriateness = c("Absolutely inappropriate", "Inappropriate", "Slightly inappropriate", "Neutral", "Slightly appropriate", "Appropriate", "Absolutely appropriate"),
+  awareness = c("Not at all aware", "Slightly aware ", "Somewhat aware ", "Moderately aware ", "Extremely aware"),
+  background = c("I have an education in, or work in, the field of computer science, computer engineering or IT.", "I do not have an education in, nor do I work in, the field of computer science, computer engineering or IT.", "Prefer not to disclose"),
+  comfort = c("Very uncomfortable", "Uncomfortable", "Neither comfortable nor uncomfortable", "Comfortable", "Very comfortable"),
+  concern = c("Not concerned", "Slightly concerned", "Moderately concerned", "Concerned", "Very concerned"),
+  confident = c("Not confident", "Slightly confident", "Moderately confident", "Confident", "Very confident"),
+  education = c("No schooling completed", "Some high school", "High school", "Some college", "Trade, technical, or vocational training", "Associate's Degree", "Bachelor's Degree", "Master's Degree", "Professional degree", "Doctorate", "Prefer not to disclose"),
+  familiar = c("Not at all familiar ", "Slightly familiar ", "Somewhat familiar ", "Moderately familiar ", "Extremely familiar"),
+  frequency = c("Never", "Rarely", "Sometimes", "Often", "Always"),
+  gender = c("Woman", "Man", "Non-binary", "Prefer not to disclose"),
+  howOften = c("Never", "Rarely", "Daily", "Weekly", "Monthly", "Yearly"),
+  howOftenDesc = c("Daily", "Weekly", "Monthly", "Yearly", "Rarely", "Never"),
+  howOftenReminded = c("Once a week", "Once a month", "Once a year", "Once every three years", "I do not want to be reminded"),
+  howOftenReapprove = c("Once a week", "Once a month", "Once a year", "Once every three years", "I do not want to reapprove apps"),
+  keepRemove = c("Keep", "Remove", "Unsure"),
+  lastTime = c("Today", "In the previous week", "In the previous month", "In the previous year", "More than a year ago", "Unsure"),
+  necessary = c("Not necessary", "Slightly necessary", "Moderately necessary", "Necessary", "Very necessary"),
+  yesNoUnsure = c("Yes", "No", "Unsure")
+  #############################################################################
+)
+
+# Define question strings to use them in plots
+questionsStrings <- list(
+  #############################################################################
+  # Pre Survey
+  "iuipcQ1" = "Consumer online privacy is really a matter of consumers' right to exercise control and autonomy over decisions about how their information is collected, used, and shared.",
+  "iuipcQ2" = "Consumer control of personal information lies at the heart of consumer privacy.",
+  "iuipcQ3" = "I believe that online privacy is invaded when control is lost or unwillingly reduced as a result of a marketing transaction.",
+  "iuipcQ4" = "Companies seeking information online should disclose the way the data are collected, processed, and used.",
+  "iuipcQ5" = "A good consumer online privacy policy should have a clear and conspicuous disclosure.",
+  "iuipcQ6" = "It is very important to me that I am aware and knowledgeable about how my personal information will be used.",
+  "iuipcQ7" = "It usually bothers me when online companies ask me for personal information.",
+  "iuipcQ8" = "When online companies ask me for personal information, I sometimes think twice before providing it.",
+  "iuipcQ9" = "It bothers me to give personal information to so many online companies.",
+  "iuipcQ10" = "I'm concerned that online companies are collecting too much personal information about me.",
+  # Main Survey
+  "changingSettings" = "After completing this survey, do you see yourself changing any settings on your \"Apps with access to your account\" page?",
+  "reviewApps" = "In six months do you see yourself reviewing third-party apps from your \"Apps with access to your account\" page?",
+  "approveEvery" = "I would want third-party apps to seek my approval each time they access my Google account.",
+  "blockData" = "I would want to designate specific data as private and inaccessible to third-party apps.",
+  "appReview" = "How often do you review what services have access to your Google account?",
+  "ssoReview" = "How often do you review what services you can sign into using your Google account?",
+  "recallSSO" = "Do you recall ever using your Google Account to sign in to third-party apps or services?",
+  "recallApp" = "Do you recall ever granting a thrid-party app access to your Google Account?"
+  #############################################################################
+)
+
+
+# Read survey responses from csv to a data frame and set it up
+preSurveyData <- read.csv("../survey-data/PreSurveyDataR.csv", header = TRUE, sep = ",", encoding="UTF-8") %>%
+  # Add prefix to some variables (aka columns) to make them unique in the survey data
+  rename_with(~ paste("pre_survey", .x, sep = "_"), any_of(c("participant_id"))) %>%
+  # Convert all categorical variables to R factors
+  mutate(
+    across(iuipcQ1:iuipcQ8, ordered, levels = factorLevels$agreementIUIPC)
+  ) %>%
+  # Calculate IUIPC scales: collection, control, and awareness
+  # Response levels are converted to numeric values ranging from 1 (strongly disagree) to 7 (strongly agree)
+  rowwise() %>%
+  mutate(
+    # Aggregate the variables iuipcQ1 to iuipcQ2 to form the "control factor"
+    iuipc.control = mean(as.numeric(c_across(iuipcQ1:iuipcQ2))),
+    log.iuipc.control = log(iuipc.control),
+    # Aggregate the variables iuipcQ3 to iuipcQ4 to form the "awareness factor"
+    iuipc.awareness = mean(as.numeric(c_across(iuipcQ3:iuipcQ4))),
+    log.iuipc.awareness = log(iuipc.awareness),
+    # Aggregate the variables iuipcQ5 to iuipcQ8 to form the "collection factor"
+    iuipc.collection = mean(as.numeric(c_across(iuipcQ5:iuipcQ8))),
+    log.iuipc.collection = log(iuipc.collection),
+    # Aggregate the variables iuipcQ1 to iuipcQ8 to form the "combined IUIPC"
+    combinedIUIPC = mean(as.numeric(c_across(iuipcQ1:iuipcQ8))),
+    log.combinedIUIPC = log(combinedIUIPC),
+    
+    # Pre Survey Questions
+    google_how_long = ordered(google_how_long, levels = factorLevels$accountAge),
+    google_recall_app = ordered(google_recall_app, levels = factorLevels$yesNoUnsure),
+    google_recall_sso = ordered(google_recall_sso, levels = factorLevels$yesNoUnsure),
+    # Convert all demographic variables to R factors 
+    gender = fct_explicit_na(factor(gender, levels = factorLevels$gender), na_level = "Prefer not to disclose"),
+    age = fct_explicit_na(ordered(age, levels = factorLevels$age), na_level = "Prefer not to disclose"),
+    education = fct_explicit_na(ordered(education, levels = factorLevels$education), na_level = "Prefer not to disclose"),
+    background = fct_explicit_na(ordered(background, levels = factorLevels$background), na_level = "Prefer not to disclose")
+  ) 
+
+# Read main survey results from csv to a data frame and set it up
+mainSurveyData <- read.csv("../survey-data/MainSurveyDataR.csv", header = TRUE, sep = ",", encoding="UTF-8") %>%
+  # Add prefix to some variables (aka columns) to make them unique in the survey data
+  rename_with(~ paste("main_survey", .x, sep = "_"), any_of(c("participant_id"))) %>%
+  # Convert all categorical variables to R factors
+  mutate(
+    # fut_remind
+    fut_remind = ordered(fut_remind, levels = factorLevels$howOftenReminded),
+    
+    # fut_reapprove
+    fut_reapprove = ordered(fut_reapprove, levels = factorLevels$howOftenReapprove),
+    
+    # Convert all "keep" variables to R factors
+    # keep_choice_newest_app
+    # keep_choice_random_app
+    # keep_choice_oldest_app
+    across(all_of(c("keep_choice_newest_app", "keep_choice_random_app", "keep_choice_oldest_app")), ordered, levels = factorLevels$keepRemove),
+    
+    # Convert all "last_use" variables to R factors
+    # last_use_newest_app
+    # last_use_random_app
+    # last_use_oldest_app
+    across(all_of(c("last_use_newest_app", "last_use_random_app", "last_use_oldest_app")), ordered, levels = factorLevels$lastTime),
+    
+    # Convert all "how often" variables to R factors
+    # sso_how_often_review
+    # app_how_often_review 
+    across(all_of(c("sso_how_often_review", "app_how_often_review")), ordered, levels = factorLevels$howOftenDesc),
+    
+    # Convert all "agreement" variables to R factors
+    # sso_how_secure
+    # sso_how_data_used
+    # sso_whether_delete
+    # sso_whether_tell_change
+    # sso_who_else
+    # app_how_secure
+    # app_how_data_used
+    # app_whether_delete
+    # app_whether_tell_change
+    # app_who_else
+    # app_what_part_access
+    # access_beneficial_newest_app
+    # access_beneficial_random_app
+    # access_beneficial_oldest_app
+    # access_concerned_newest_app
+    # access_concerned_random_app
+    # access_concerned_oldest_app
+    # access_change_newest_app
+    # access_change_random_app
+    # access_change_oldest_app
+    # rfl_understand_link
+    # rfl_understand_access
+    # fut_approve_every
+    # fut_block_data
+    across(all_of(c("sso_how_secure", "sso_how_data_used", "sso_whether_delete", "sso_whether_tell_change", "sso_who_else")), ordered, levels = factorLevels$agreement),
+    across(all_of(c("app_how_secure", "app_how_data_used", "app_whether_delete", "app_whether_tell_change", "app_who_else", "app_what_part_access")), ordered, levels = factorLevels$agreement),
+    across(all_of(c("access_beneficial_newest_app", "access_beneficial_random_app", "access_beneficial_oldest_app", "access_concerned_newest_app", "access_concerned_random_app", "access_concerned_oldest_app", "access_change_newest_app", "access_change_random_app", "access_change_oldest_app")), ordered, levels = factorLevels$agreement),
+    across(all_of(c("rfl_understand_link", "rfl_understand_access", "fut_approve_every", "fut_block_data")), ordered, levels = factorLevels$agreement),
+    
+    # Convert all "yes, no, unsure" variables to R factors
+    # recall_newest_app
+    # recall_random_app
+    # recall_oldest_app
+    # aware_prior_newest_app
+    # aware_prior_random_app
+    # aware_prior_oldest_app
+    # rfl_change_settings
+    # rfl_six_month_review
+    across(all_of(c("recall_newest_app", "recall_random_app", "recall_oldest_app", "aware_prior_newest_app", "aware_prior_random_app", "aware_prior_oldest_app", "rfl_change_settings", "rfl_six_month_review")), ordered, levels = factorLevels$yesNoUnsure),
+    
+    # access_beneficial_newest_app
+    newestBeneficialAccessResponse = access_beneficial_newest_app,
+    
+    # access_beneficial_random_app
+    randomBeneficialAccessResponse = access_beneficial_random_app,
+    
+    # access_beneficial_oldest_app
+    oldestBeneficialAccessResponse = access_beneficial_oldest_app,
+    
+    # access_concerned_newest_app
+    newestConcernedAccessResponse = access_concerned_newest_app,
+    
+    # access_concerned_random_app
+    randomConcernedAccessResponse = access_concerned_random_app,
+    
+    # access_concerned_oldest_app
+    oldestConcernedAccessResponse = access_concerned_oldest_app,
+    
+    # access_change_newest_app
+    newestChangeAccessResponse = access_change_newest_app,
+    
+    # access_change_random_app
+    randomChangeAccessResponse = access_change_random_app,
+    
+    # access_change_oldest_app
+    oldestChangeAccessResponse = access_change_oldest_app
+  )
+
+# Join pre and main survey data using the uuids from the "link_table.csv"
+surveyData <- read.csv("../survey-data/LinkTableDataR.csv", header = TRUE, sep = ",") %>%
+  left_join(preSurveyData, by = c("pre_survey_participant_id" = "pre_survey_participant_id")) %>%
+  left_join(mainSurveyData, by = c("main_survey_participant_id" = "main_survey_participant_id"))
+
+# Read permission category results from csv to a data frame and set it up
+permissionCategoryData <- read.csv("../survey-data/PermissionCategoryDataR.csv", header = TRUE, sep = ",", encoding="UTF-8") %>%
+  # Convert all categorical variables to R factors
+  mutate(
+    # Convert all "concerned" variables to R factors
+    # basic_account_info_concerned
+    # gmail_concerned
+    # google_drive_concerned
+    # additional_access_concerned
+    # google_contacts_concerned
+    # google_calendar_concerned
+    across(all_of(c("basic_account_info_concerned", "gmail_concerned", "google_drive_concerned", "additional_access_concerned", "google_contacts_concerned", "google_calendar_concerned")), ordered, levels = factorLevels$concern),
+    
+    # Convert all "necessary" variables to R factors
+    # basic_account_info_necessary
+    # gmail_necessary
+    # google_drive_necessary
+    # additional_access_necessary
+    # google_contacts_necessary
+    # google_calendar_necessary
+    across(all_of(c("basic_account_info_necessary", "gmail_necessary", "google_drive_necessary", "additional_access_necessary", "google_contacts_necessary", "google_calendar_necessary")), ordered, levels = factorLevels$necessary),
+    
+    # Convert all "confident" variables to R factors
+    # basic_account_info_understand
+    # gmail_understand
+    # google_drive_understand
+    # additional_access_understand
+    # google_contacts_understand
+    # google_calendar_understand
+    across(all_of(c("basic_account_info_understand", "gmail_understand", "google_drive_understand", "additional_access_understand", "google_contacts_understand", "google_calendar_understand")), ordered, levels = factorLevels$confident)
+  )
+
+# Read permission results from csv to a data frame and set it up
+permissionData <- read.csv("../survey-data/PermissionDataR.csv", header = TRUE, sep = ",", encoding="UTF-8") %>%
+  # Convert all categorical variables to R factors
+  mutate(
+    # Convert all "concerned" variables to R factors
+    # perm1_concerned
+    # perm2_concerned
+    # perm3_concerned
+    # perm4_concerned
+    # perm5_concerned
+    # perm6_concerned
+    across(all_of(c("perm1_concerned", "perm2_concerned", "perm3_concerned", "perm4_concerned", "perm5_concerned", "perm6_concerned")), ordered, levels = factorLevels$concern),
+    
+    # Convert all "necessary" variables to R factors
+    # perm1_necessary
+    # perm2_necessary
+    # perm3_necessary
+    # perm4_necessary
+    # perm5_necessary
+    # perm6_necessary
+    across(all_of(c("perm1_necessary", "perm2_necessary", "perm3_necessary", "perm4_necessary", "perm5_necessary", "perm6_necessary")), ordered, levels = factorLevels$necessary),
+    
+    # Convert all "confident" variables to R factors
+    # perm1_understand
+    # perm2_understand
+    # perm3_understand
+    # perm4_understand
+    # perm5_understand
+    # perm6_understand
+    across(all_of(c("perm1_understand", "perm2_understand", "perm3_understand", "perm4_understand", "perm5_understand", "perm6_understand")), ordered, levels = factorLevels$confident)
+  ) 
+
+# Read app install date results from csv to a data frame and set it up
+appInstallDateData <- read.csv("../survey-data/AppInstallDateDataR.csv", header = TRUE, sep = ",", encoding="UTF-8")
+
+
+###############################################################################
+# Regression Tables Name Mappings
+###############################################################################
+regressionTables.colNameMappings <- c(
+  "Factor" = "term",
+  "Estimate" = "estimate",
+  "Odds ratio" = "OR",
+  "Error" = "std.error",
+  "t value" = "t.value",
+  "z value" = "z.value",
+  "Conf. int." = "conf.int",
+  "Pr(\\textgreater\\textbar z\\textbar)" = "p.value",
+  " " = "signif"
+)
+
+
+regressionTables.rowNameMappings <- list(
+  "iuipc.control.is_highTRUE" = "$\\text{IUIPC control} > 3.5$",
+  "iuipc.awareness.is_highTRUE" = "$\\text{IUIPC awareness} > 3.5$",
+  "iuipc.collection.is_highTRUE" = "$\\text{IUIPC collection} > 3.5$",
+  "gender.is_manTRUE" = "$\\text{Gender} = Male$",
+  "age.is_youngTRUE" = "$\\text{Age} \\in\\{18-24\\}$",
+  "age.is_intermediateTRUE" = "$\\text{Age} \\in\\{35-44,~45-54\\}$",
+  "age.is_oldTRUE" = "$\\text{Age} \\in\\{55-64,~65~\\text{or older}\\}$"
+)
+
+
+
+###############################################################################
+# Function to Calculate pseudo R-squared
+###############################################################################
+aldrich_nelson_pR2 <- function( model, null_model = NULL ){
+  # implemented from " Goodness-of-Fit Measures for Probit and Logit*" by Hagle and Mitchell https://www.jstor.org/stable/pdf/2111590.pdf
+
+  lnL_1 <- logLik(model)
+  
+  if(is.null(null_model)){
+    lnL_0 <- logLik(update(model, ~1, trace = FALSE))
+  } else{
+    
+    lnL_0 <- logLik(null_model)
+  }
+  
+  LLR <- (lnL_0[1]-lnL_1[1])
+  
+  N <- nobs(model)
+  
+  R2 <-  -2 * LLR / (N - 2 * LLR)
+  return(R2 * 1.72) # do the worst adjustment that's listed in the paper. 
+}
+
+```
+
+
+### IUIPC Pre Survey
+```{r iuipc_factors_pre_survey, echo=FALSE, results="asis"}
+# Calculate IUIPC scale table from main data
+knitr::kable(
+  # Remove NA rows
+  drop_na(preSurveyData, starts_with("iuipc.")) %>%
+  # Calculate IUIPC scales for control collection, and awareness + standard deviation for each scale
+  summarise(across(starts_with("iuipc."), list(mean = mean, sd = sd), .names = "{.col}.{.fn}"))
+)
+```
+
+### Combined IUIPC Pre Survey
+```{r combined_iuipc_factors_pre_survey, echo=FALSE, results="asis"}
+# Calculate IUIPC scale table from main data
+knitr::kable(
+  # Remove NA rows
+  drop_na(preSurveyData, starts_with("combinedIUIPC")) %>%
+  # Calculate IUIPC scales for control collection, and awareness + standard deviation for each scale
+  summarise(across(starts_with("combinedIUIPC"), list(mean = mean, sd = sd), .names = "{.col}.{.fn}"))
+)
+```
+
+### IUIPC Main Survey
+```{r iuipc_factors_main_survey, echo=FALSE, results="asis"}
+# Calculate IUIPC scale table from survey data
+knitr::kable(
+  # Remove NA rows
+  drop_na(surveyData, starts_with("iuipc.")) %>%
+  # Calculate IUIPC scales for control collection, and awareness + standard deviation for each scale
+  summarise(across(starts_with("iuipc."), list(mean = mean, sd = sd), .names = "{.col}.{.fn}"))
+)
+```
+
+### Combined IUIPC Main Survey
+```{r combined_iuipc_factors_main_survey, echo=FALSE, results="asis"}
+# Calculate IUIPC scale table from main data
+knitr::kable(
+  # Remove NA rows
+  drop_na(surveyData, starts_with("combinedIUIPC")) %>%
+  # Calculate IUIPC scales for control collection, and awareness + standard deviation for each scale
+  summarise(across(starts_with("combinedIUIPC"), list(mean = mean, sd = sd), .names = "{.col}.{.fn}"))
+)
+```
+
+
+
+### Access Benefit/Concern/Change Bar plot 
+
+```{r access_bar_plot, echo=FALSE}
+newSubsetData <- surveyData %>%
+   drop_na(newestBeneficialAccessResponse, newestConcernedAccessResponse, newestChangeAccessResponse) %>%
+   select(starts_with(c("newest"))) %>%
+   pivot_longer(everything(),
+                names_to = c("Time", "NewQuestion", ".value"),
+                names_pattern = "(.+)(Beneficial|Concerned|Change)Access(.+)",
+                names_transform = c(
+                  Time = ~ ordered(.x, levels = c("newest")),
+                  NewQuestion = ~ ordered(.x, levels = c("Beneficial", "Change", "Concerned"))
+                  )
+   ) %>%
+   mutate(NewAccess = ordered(str_glue("{NewQuestion} ({Time})")), .after = NewQuestion)
+
+randomSubsetData <- surveyData %>%
+   drop_na(randomBeneficialAccessResponse, randomConcernedAccessResponse, randomChangeAccessResponse) %>%
+   select(starts_with(c("random"))) %>%
+   pivot_longer(everything(),
+                names_to = c("Time", "RandomQuestion", ".value"),
+                names_pattern = "(.+)(Beneficial|Concerned|Change)Access(.+)",
+                names_transform = c(
+                  Time = ~ ordered(.x, levels = c("random")),
+                  RandomQuestion = ~ ordered(.x, levels = c("Beneficial", "Change", "Concerned"))
+                  )
+   ) %>%
+   mutate(RandomAccess = ordered(str_glue("{RandomQuestion} ({Time})")), .after = RandomQuestion)
+
+ oldestSubsetData <- surveyData %>%
+   drop_na(oldestBeneficialAccessResponse, oldestConcernedAccessResponse, oldestChangeAccessResponse) %>%
+   select(starts_with(c("oldest"))) %>%
+   pivot_longer(everything(),
+                names_to = c("Time", "OldQuestion", ".value"),
+                names_pattern = "(.+)(Beneficial|Concerned|Change)Access(.+)",
+                names_transform = c(
+                  Time = ~ ordered(.x, levels = c("oldest")),
+                  OldQuestion = ~ ordered(.x, levels = c("Beneficial", "Change", "Concerned"))
+                  )
+   ) %>%
+   mutate(OldAccess = ordered(str_glue("{OldQuestion} ({Time})")), .after = OldQuestion)
+ 
+for(responses in c("Response")) {
+  p1 <- ggplot(newSubsetData, aes(y = NewQuestion, fill = get(responses), xmin = 0, xmax = 1)) +
+    geom_bar(position = position_fill(reverse = TRUE), width = .8, color = "grey50", size = .1, show.legend = FALSE) +
+    facet_grid(Time~., scales = "free_y", space = "free", switch = "y") +
+    geom_fit_text(stat = "count", aes(label = ..count..), position=position_fill(reverse = TRUE), size = 8,  min.size = 3, padding.x = grid::unit(0, "mm"), padding.y = grid::unit(0, "mm"), reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+    scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+    scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}) +
+    guides(fill = guide_legend(nrow = 1, byrow = TRUE)) +
+    theme_minimal(base_size = 10) +
+    theme(
+      plot.margin = margin(l = 0, r = 2),
+      plot.title = element_blank(),
+      axis.title = element_blank(),
+      axis.line.y = element_line(color = "grey50"),
+      axis.text.x = element_blank(),
+      legend.title = element_blank(),
+      legend.position = "bottom",
+      legend.justification = c("center", "top"),
+      legend.key.size = unit(8, 'pt'),
+      legend.box.margin = margin(),
+      panel.grid.major.y = element_blank(),
+      strip.text = element_text(color = "grey30")
+    )  
+  
+  p2 <- ggplot(oldestSubsetData, aes(y = OldQuestion, fill = get(responses), xmin = 0, xmax = 1)) +
+    geom_bar(position = position_fill(reverse = TRUE), width = .8, color = "grey50", size = .1, show.legend = FALSE) +
+    facet_grid(Time~., scales = "free_y", space = "free", switch = "y") +
+    geom_fit_text(stat = "count", aes(label = ..count..), position=position_fill(reverse = TRUE), size = 8,  min.size = 3, padding.x = grid::unit(0, "mm"), padding.y = grid::unit(0, "mm"), reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+    scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+    scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}) +
+    guides(fill = guide_legend(nrow = 1, byrow = TRUE)) +
+    theme_minimal(base_size = 10) +
+    theme(
+      plot.margin = margin(l = 0, r = 2),
+      plot.title = element_blank(),
+      axis.title = element_blank(),
+      axis.line.y = element_line(color = "grey50"),
+      axis.text.x = element_blank(),
+      legend.title = element_blank(),
+      legend.position = "bottom",
+      legend.justification = c("center", "top"),
+      legend.key.size = unit(8, 'pt'),
+      legend.box.margin = margin(),
+      panel.grid.major.y = element_blank(),
+      strip.text = element_text(color = "grey30")
+    )  
+
+  p3 <- ggplot(randomSubsetData, aes(y = RandomQuestion, fill = get(responses), xmin = 0, xmax = 1)) +
+    geom_bar(position = position_fill(reverse = TRUE), width = .8, color = "grey50", size = .1) +
+    facet_grid(Time~., scales = "free_y", space = "free", switch = "y") +
+    geom_fit_text(stat = "count", aes(label = ..count..), position=position_fill(reverse = TRUE), size = 8,  min.size = 7, reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+    scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+    scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}) +
+    guides(fill = guide_legend(nrow = 2, byrow = TRUE)) +
+    theme_minimal(base_size = 10) +
+    theme(
+      plot.margin = margin(l = 0, r = 2),
+      plot.title = element_blank(),
+      axis.title = element_blank(),
+      axis.line.y = element_line(color = "grey50"),
+      legend.title = element_blank(),
+      legend.position = "bottom",
+      legend.justification = c("center", "top"),
+      legend.key.size = unit(8, 'pt'),
+      legend.box.margin = margin(),
+      panel.grid.major.y = element_blank(),
+      strip.text = element_text(color = "grey30")
+    )
+  
+  plot_grid(p1, p2, p3 + theme(legend.position = "none"), get_legend(p3), nrow = 4, rel_heights = c(1, 1, 1.15, 0.55))
+  ggsave(str_glue("access_benefit_concern_change.pdf"), path = "./figures/", width = 3.17, height = 3 / 4 * 3.17, units = "in", device = "pdf")  
+}
+ 
+plot_grid(p1, p2, p3 + theme(legend.position = "none"), get_legend(p3), nrow = 4, rel_heights = c(1, 1, 1.15, 0.55))
+
+```
+
+
+### Aware/Recall/Keep Bar plot 
+    
+```{r aware_recall_bar_plot, echo=FALSE}
+awarePriorRecallKeepBarSubsetOfSurveyDataData <- surveyData %>%
+  transmute(
+    # recall_newest_app
+    newestRecallYesNoUnsureResponse = ordered(str_replace_all(recall_newest_app, c("Yes" = "Yes", "No" = "No")), levels = c("No", "Unsure", "Yes")),
+    
+    # recall_random_app
+    randomRecallYesNoUnsureResponse = ordered(str_replace_all(recall_random_app, c("Yes" = "Yes", "No" = "No")), levels = c("No", "Unsure", "Yes")),
+    
+    # recall_oldest_app
+    oldestRecallYesNoUnsureResponse = ordered(str_replace_all(recall_oldest_app, c("Yes" = "Yes", "No" = "No")), levels = c("No", "Unsure", "Yes")),
+    
+    # aware_prior_newest_app
+    newestAwarePriorYesNoUnsureResponse = ordered(str_replace_all(aware_prior_newest_app, c("Yes" = "Yes", "No" = "No")), levels = c("No", "Unsure", "Yes")),
+    
+    # aware_prior_random_app
+    randomAwarePriorYesNoUnsureResponse = ordered(str_replace_all(aware_prior_random_app, c("Yes" = "Yes", "No" = "No")), levels = c("No", "Unsure", "Yes")),
+    
+    # aware_prior_oldest_app
+    oldestAwarePriorYesNoUnsureResponse = ordered(str_replace_all(aware_prior_oldest_app, c("Yes" = "Yes", "No" = "No")), levels = c("No", "Unsure", "Yes")),
+    
+    # keep_choice_newest_app
+    newestKeepYesNoUnsureResponse = ordered(str_replace_all(keep_choice_newest_app, c("Keep" = "Yes", "Remove" = "No")), levels = c("No", "Unsure", "Yes")),
+
+    # keep_choice_random_app
+    randomKeepYesNoUnsureResponse = ordered(str_replace_all(keep_choice_random_app, c("Keep" = "Yes", "Remove" = "No")), levels = c("No", "Unsure", "Yes")),
+
+    # keep_choice_oldest_app
+    oldestKeepYesNoUnsureResponse = ordered(str_replace_all(keep_choice_oldest_app, c("Keep" = "Yes", "Remove" = "No")), levels = c("No", "Unsure", "Yes"))
+)
+
+
+
+newestSubsetData <- awarePriorRecallKeepBarSubsetOfSurveyDataData %>%
+   drop_na(newestRecallYesNoUnsureResponse, newestAwarePriorYesNoUnsureResponse, newestKeepYesNoUnsureResponse) %>%
+   select(starts_with(c("newest"))) %>%
+   pivot_longer(everything(),
+                names_to = c("Time", "newestQuestion", ".value"),
+                names_pattern = "(.+)(Recall|AwarePrior|Keep)YesNoUnsure(.+)",
+                names_transform = c(
+                  Time = ~ ordered(.x, levels = c("newest")),
+                  newestQuestion = ~ ordered(str_replace_all(.x, c("Keep" = "Keep App", "AwarePrior" = "Aware Perm.", "Recall" = "Recall Auth.")), levels = c("Keep App", "Aware Perm.", "Recall Auth."))
+                  )
+   ) %>%
+   mutate(newestYesNoUnsure = ordered(str_glue("{newestQuestion} ({Time})")), .after = newestQuestion)
+
+randomSubsetData <- awarePriorRecallKeepBarSubsetOfSurveyDataData %>%
+   drop_na(randomRecallYesNoUnsureResponse, randomAwarePriorYesNoUnsureResponse, randomKeepYesNoUnsureResponse) %>%
+   select(starts_with(c("random"))) %>%
+   pivot_longer(everything(),
+                names_to = c("Time", "randomQuestion", ".value"),
+                names_pattern = "(.+)(Recall|AwarePrior|Keep)YesNoUnsure(.+)",
+                names_transform = c(
+                  Time = ~ ordered(.x, levels = c("random")),
+                  randomQuestion = ~ ordered(str_replace_all(.x, c("Keep" = "Keep App", "AwarePrior" = "Aware Perm.", "Recall" = "Recall Auth.")), levels = c("Keep App", "Aware Perm.", "Recall Auth."))
+                  )
+   ) %>%
+   mutate(randomYesNoUnsure = ordered(str_glue("{randomQuestion} ({Time})")), .after = randomQuestion)
+
+oldestSubsetData <- awarePriorRecallKeepBarSubsetOfSurveyDataData %>%
+   drop_na(oldestRecallYesNoUnsureResponse, oldestAwarePriorYesNoUnsureResponse, oldestKeepYesNoUnsureResponse) %>%
+   select(starts_with(c("oldest"))) %>%
+   pivot_longer(everything(),
+                names_to = c("Time", "oldestQuestion", ".value"),
+                names_pattern = "(.+)(Recall|AwarePrior|Keep)YesNoUnsure(.+)",
+                names_transform = c(
+                  Time = ~ ordered(.x, levels = c("oldest")),
+                  oldestQuestion = ~ ordered(str_replace_all(.x, c("Keep" = "Keep App", "AwarePrior" = "Aware Perm.", "Recall" = "Recall Auth.")), levels = c("Keep App", "Aware Perm.", "Recall Auth."))
+                  )
+   ) %>%
+   mutate(oldestYesNoUnsure = ordered(str_glue("{oldestQuestion} ({Time})")), .after = oldestQuestion)
+
+for(responses in c("Response")) {
+  
+    p1 <- ggplot(newestSubsetData, aes(y = newestQuestion, fill = get(responses), xmin = 0, xmax = 1)) +
+    geom_bar(position = position_fill(reverse = TRUE), width = .8, color = "grey50", size = .1, show.legend = FALSE) +
+    facet_grid(Time~., scales = "free_y", space = "free", switch = "y") +
+    geom_fit_text(stat = "count", aes(label = ..count..), position=position_fill(reverse = TRUE), size = 8,  min.size = 7, reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+    scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+    scale_fill_brewer(palette = "Set1", labels = function(x){str_trunc(x, 18)}) +
+    guides(fill = guide_legend(nrow = 1, byrow = TRUE)) +
+    theme_minimal(base_size = 10) +
+    theme(
+      plot.margin = margin(l = 0, r = 2),
+      plot.title = element_blank(),
+      axis.title = element_blank(),
+      axis.line.y = element_line(color = "grey50"),
+      axis.text.x = element_blank(),
+      legend.title = element_blank(),
+      legend.position = "bottom",
+      legend.justification = c("center", "top"),
+      legend.key.size = unit(8, 'pt'),
+      legend.box.margin = margin(),
+      panel.grid.major.y = element_blank(),
+      strip.text = element_text(color = "grey30")
+    )  
+  
+  p2 <- ggplot(oldestSubsetData, aes(y = oldestQuestion, fill = get(responses), xmin = 0, xmax = 1)) +
+    geom_bar(position = position_fill(reverse = TRUE), width = .8, color = "grey50", size = .1, show.legend = FALSE) +
+    facet_grid(Time~., scales = "free_y", space = "free", switch = "y") +
+    geom_fit_text(stat = "count", aes(label = ..count..), position=position_fill(reverse = TRUE), size = 8,  min.size = 3, padding.x = grid::unit(0, "mm"), padding.y = grid::unit(0, "mm"), reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+    scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+    scale_fill_brewer(palette = "Set1", labels = function(x){str_trunc(x, 18)}) +
+    guides(fill = guide_legend(nrow = 1, byrow = TRUE)) +
+    theme_minimal(base_size = 10) +
+    theme(
+      plot.margin = margin(l = 0, r = 2),
+      plot.title = element_blank(),
+      axis.title = element_blank(),
+      axis.line.y = element_line(color = "grey50"),
+      axis.text.x = element_blank(),
+      legend.title = element_blank(),
+      legend.position = "bottom",
+      legend.justification = c("center", "top"),
+      legend.key.size = unit(8, 'pt'),
+      legend.box.margin = margin(),
+      panel.grid.major.y = element_blank(),
+      strip.text = element_text(color = "grey30")
+    )  
+
+  p3 <- ggplot(randomSubsetData, aes(y = randomQuestion, fill = get(responses), xmin = 0, xmax = 1)) +
+    geom_bar(position = position_fill(reverse = TRUE), width = .8, color = "grey50", size = .1) +
+    facet_grid(Time~., scales = "free_y", space = "free", switch = "y") +
+    geom_fit_text(stat = "count", aes(label = ..count..), position=position_fill(reverse = TRUE), size = 8,  min.size = 7, reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+    scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+    scale_fill_brewer(palette = "Set1", labels = function(x){str_trunc(x, 18)}) +
+    guides(fill = guide_legend(nrow = 1, byrow = TRUE)) +
+    theme_minimal(base_size = 10) +
+    theme(
+      plot.margin = margin(l = 0, r = 2),
+      plot.title = element_blank(),
+      axis.title = element_blank(),
+      axis.line.y = element_line(color = "grey50"),
+      legend.title = element_blank(),
+      legend.position = "bottom",
+      legend.justification = c("center", "top"),
+      legend.key.size = unit(8, 'pt'),
+      legend.box.margin = margin(),
+      panel.grid.major.y = element_blank(),
+      strip.text = element_text(color = "grey30")
+    )    
+    
+  plot_grid(p1, p2, p3 + theme(legend.position = "none"), get_legend(p3), nrow = 4, rel_heights = c(1, 1, 1.15, 0.3))
+  ggsave(str_glue("aware_prior_recall_keep.pdf"), path = "./figures/", width = 3.17, height = 3 / 4 * 3.17, units = "in", device = "pdf")  
+}  
+
+plot_grid(p1, p2, p3 + theme(legend.position = "none"), get_legend(p3), nrow = 4, rel_heights = c(1, 1, 1.15, 0.3))
+```
+
+
+
+### Last Use Bar plot 
+    
+```{r last_use_bar_plot, echo=FALSE}
+lastUseBarSubsetOfSurveyDataData <- surveyData %>%
+  transmute(
+    # last_use_newest_app
+    newestLastUseWhenResponse = ordered(str_replace_all(last_use_newest_app, c("In the previous week" = "Previous week", "In the previous month" = "Previous month", "In the previous year" = "Previous year", "More than a year ago" = "More than a year")), levels = c("Today", "Previous week", "Previous month", "Previous year", "More than a year", "Unsure")),
+    
+    # last_use_random_app
+    randomLastUseWhenResponse = ordered(str_replace_all(last_use_random_app, c("In the previous week" = "Previous week", "In the previous month" = "Previous month", "In the previous year" = "Previous year", "More than a year ago" = "More than a year")), levels = c("Today", "Previous week", "Previous month", "Previous year", "More than a year", "Unsure")),
+    
+    # last_use_oldest_app
+    oldestLastUseWhenResponse = ordered(str_replace_all(last_use_oldest_app, c("In the previous week" = "Previous week", "In the previous month" = "Previous month", "In the previous year" = "Previous year", "More than a year ago" = "More than a year")), levels = c("Today", "Previous week", "Previous month", "Previous year", "More than a year", "Unsure")),
+)
+
+newestSubsetData <- lastUseBarSubsetOfSurveyDataData %>%
+   drop_na(newestLastUseWhenResponse) %>%
+   select(starts_with(c("newest"))) %>%
+   pivot_longer(everything(),
+                names_to = c("Time", "newestQuestion", ".value"),
+                names_pattern = "(.+)(LastUse)When(.+)",
+                names_transform = c(
+                  Time = ~ ordered(.x, levels = c("newest")),
+                  newestQuestion = ~ ordered(str_replace_all(.x, c("LastUse" = "Newest App")), levels = c("Newest App"))
+                  )
+   ) %>%
+   mutate(newestLastUse = ordered(str_glue("{newestQuestion} ({Time})")), .after = newestQuestion)
+
+randomSubsetData <- lastUseBarSubsetOfSurveyDataData %>%
+   drop_na(randomLastUseWhenResponse) %>%
+   select(starts_with(c("random"))) %>%
+   pivot_longer(everything(),
+                names_to = c("Time", "randomQuestion", ".value"),
+                names_pattern = "(.+)(LastUse)When(.+)",
+                names_transform = c(
+                  Time = ~ ordered(.x, levels = c("random")),
+                  randomQuestion = ~ ordered(str_replace_all(.x, c("LastUse" = "Random App")), levels = c("Random App"))
+                  )
+   ) %>%
+   mutate(randomLastUse = ordered(str_glue("{randomQuestion} ({Time})")), .after = randomQuestion)
+
+oldestSubsetData <- lastUseBarSubsetOfSurveyDataData %>%
+   drop_na(oldestLastUseWhenResponse) %>%
+   select(starts_with(c("oldest"))) %>%
+   pivot_longer(everything(),
+                names_to = c("Time", "oldestQuestion", ".value"),
+                names_pattern = "(.+)(LastUse)When(.+)",
+                names_transform = c(
+                  Time = ~ ordered(.x, levels = c("oldest")),
+                  oldestQuestion = ~ ordered(str_replace_all(.x, c("LastUse" = "Oldest App")), levels = c("Oldest App"))
+                  )
+   ) %>%
+   mutate(oldestLastUse = ordered(str_glue("{oldestQuestion} ({Time})")), .after = oldestQuestion)
+
+for(responses in c("Response")) {
+    p1 <- ggplot(newestSubsetData, aes(y = newestQuestion, fill = get(responses), xmin = 0, xmax = 1)) +
+    geom_bar(position = position_fill(reverse = TRUE), width = .8, color = "grey50", size = .1, show.legend = FALSE) +
+    geom_fit_text(stat = "count", aes(label = ..count..), position=position_fill(reverse = TRUE), size = 8,  min.size = 7, reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+    scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+    scale_y_discrete(labels = wrap_format(6)) +  
+    scale_fill_brewer(palette = "Set1", labels = function(x){str_trunc(x, 18)}) +
+    guides(fill = guide_legend(nrow = 1, byrow = TRUE)) +
+    labs(
+      "title" = str_wrap("When was the last time you recall using...", 45)
+    ) +
+    theme_minimal(base_size = 10) +
+    theme(
+      plot.margin = margin(l = 0, r = 0, b = 0),
+      plot.title.position = "plot",
+      plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+      axis.title = element_blank(),
+      axis.line.y = element_line(color = "grey50"),
+      axis.text.x = element_blank(),
+      legend.title = element_blank(),
+      legend.position = "bottom",
+      legend.justification = c("center", "top"),
+      legend.key.size = unit(8, 'pt'),
+      legend.box.margin = margin(),
+      panel.grid.major.y = element_blank(),
+      strip.text = element_text(color = "grey30")
+    )  
+  
+  p2 <- ggplot(oldestSubsetData, aes(y = oldestQuestion, fill = get(responses), xmin = 0, xmax = 1)) +
+    geom_bar(position = position_fill(reverse = TRUE), width = .8, color = "grey50", size = .1, show.legend = FALSE) +
+    geom_fit_text(stat = "count", aes(label = ..count..), position=position_fill(reverse = TRUE), size = 8,  min.size = 3, padding.x = grid::unit(0, "mm"), padding.y = grid::unit(0, "mm"), reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+    scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+    scale_y_discrete(labels = wrap_format(6)) +
+    scale_fill_brewer(palette = "Set1", labels = function(x){str_trunc(x, 18)}) +
+    guides(fill = guide_legend(nrow = 1, byrow = TRUE)) +
+    theme_minimal(base_size = 10) +
+    theme(
+      plot.margin = margin(l = 0, r = 0, b = 0, t = 0),
+      plot.title = element_blank(),
+      axis.title = element_blank(),
+      axis.line.y = element_line(color = "grey50"),
+      axis.text.x = element_blank(),
+      legend.title = element_blank(),
+      legend.position = "bottom",
+      legend.justification = c("center", "top"),
+      legend.key.size = unit(8, 'pt'),
+      legend.box.margin = margin(),
+      panel.grid.major.y = element_blank(),
+      strip.text = element_text(color = "grey30")
+    )  
+
+
+
+  p3 <- ggplot(randomSubsetData, aes(y = randomQuestion, fill = get(responses), xmin = 0, xmax = 1)) +
+    geom_bar(position = position_fill(reverse = TRUE), width = .8, color = "grey50", size = .1) +
+    geom_fit_text(stat = "count", aes(label = ..count..), position=position_fill(reverse = TRUE), size = 8,  min.size = 7, reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+    scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+    scale_y_discrete(labels = wrap_format(6)) +
+    scale_fill_brewer(palette = "Set1", labels = function(x){str_trunc(x, 38)}) +
+    guides(fill = guide_legend(nrow = 2, byrow = TRUE)) +
+    theme_minimal(base_size = 10) +
+    theme(
+      plot.margin = margin(l = 0, r = 0),
+      plot.title = element_blank(),
+      axis.title = element_blank(),
+      axis.line.y = element_line(color = "grey50"),
+      legend.title = element_blank(),
+      legend.position = "bottom",
+      legend.justification = c("center", "top"),
+      legend.key.size = unit(8, 'pt'),
+      legend.box.margin = margin(),
+      panel.grid.major.y = element_blank(),
+      strip.text = element_text(color = "grey30"),
+      legend.margin = margin(t = -5, r = 0, b = 0, l = -40, unit = "pt")
+    )    
+}  
+
+  p1 / p2 / p3
+  ggsave(str_glue("last_use_app.pdf"), path = "./figures/", width = 3.17, height = 3 / 4 * 3.17, units = "in", device = "pdf")  
+  
+```
+
+
+### SSO/APP Bar plot 
+
+```{r sso_app_bar_plot, echo=FALSE}
+
+ssoAppBarSubsetOfSurveyDataData <- surveyData %>%
+  transmute(
+    # sso_how_secure
+    ssoHowSecureAgreementResponse = sso_how_secure,
+    
+    # sso_how_data_used
+    ssoHowDataUsedAgreementResponse = sso_how_data_used,
+    
+    # sso_whether_delete
+    ssoWhetherDeleteAgreementResponse = sso_whether_delete,
+    
+    # sso_whether_tell_change
+    ssoWhetherTellChangeAgreementResponse = sso_whether_tell_change,
+    
+    # sso_who_else
+    ssoWhoElseAgreementResponse = sso_who_else,
+    
+    # app_how_secure
+    appHowSecureAgreementResponse = app_how_secure,
+    
+    # app_how_data_used
+    appHowDataUsedAgreementResponse = app_how_data_used,
+    
+    # app_whether_delete
+    appWhetherDeleteAgreementResponse = app_whether_delete,
+    
+    # app_whether_tell_change
+    appWhetherTellChangeAgreementResponse = app_whether_tell_change,
+    
+    # app_who_else
+    appWhoElseAgreementResponse = app_who_else,
+    
+    # app_what_part_access
+    appWhatPartAccessAgreementResponse = app_what_part_access
+)
+
+ssoSubsetData <- ssoAppBarSubsetOfSurveyDataData %>%
+   drop_na(ssoHowSecureAgreementResponse, ssoHowDataUsedAgreementResponse, ssoWhetherDeleteAgreementResponse, ssoWhetherTellChangeAgreementResponse, ssoWhoElseAgreementResponse)  %>%
+   select(starts_with(c("sso"))) %>%
+   pivot_longer(everything(),
+                names_to = c("Type", "sQuestion", ".value"),
+                names_pattern = "(.+)(HowSecure|HowDataUsed|WhetherDelete|WhetherTellChange|WhoElse)Agreement(.+)",
+                names_transform = c(
+                  Type = ~ ordered(str_replace_all(.x, c("sso" = "SSO")), levels = c("SSO")),
+                  sQuestion = ~ ordered(str_replace_all(.x, c("HowSecure" = "How Secure", "HowDataUsed" = "How Data Used", "WhetherDelete" = "Whether Delete", "WhetherTellChange" = "Will Tell Change", "WhoElse" = "Who Sees Data")), levels = c("Will Tell Change", "Whether Delete", "Who Sees Data", "How Data Used", "How Secure"))
+                  )
+   ) %>%
+   mutate(sQuestion = ordered(str_glue("{sQuestion}"), levels = c("Will Tell Change", "Whether Delete", "Who Sees Data", "How Data Used", "How Secure")), .after = sQuestion)
+
+appSubsetData <- ssoAppBarSubsetOfSurveyDataData %>%
+   drop_na(appHowSecureAgreementResponse, appHowDataUsedAgreementResponse, appWhetherDeleteAgreementResponse, appWhetherTellChangeAgreementResponse, appWhoElseAgreementResponse)  %>%
+   select(starts_with(c("app"))) %>%
+   pivot_longer(everything(),
+                names_to = c("Type", "aQuestion", ".value"),
+                names_pattern = "(.+)(HowDataUsed|HowSecure|WhetherDelete|WhoElse|WhetherTellChange|WhatPartAccess)Agreement(.+)",
+                names_transform = c(
+                  Type = ~ ordered(str_replace_all(.x, c("app" = "APP")), levels = c("APP")),
+                  aQuestion = ~ ordered(str_replace_all(.x, c("WhatPartAccess" = "What Access", "HowSecure" = "How Secure", "HowDataUsed" = "How Data Used", "WhetherDelete" = "Whether Delete", "WhoElse" = "Who Sees Data", "WhetherTellChange" = "Will Tell Change")), levels = c("What Access", "Will Tell Change", "Whether Delete", "Who Sees Data", "How Data Used", "How Secure"))
+                  )
+   ) %>%
+   mutate(aQuestion = ordered(str_glue("{aQuestion}"), levels = c("What Access", "Will Tell Change", "Whether Delete", "Who Sees Data", "How Data Used", "How Secure")), .after = aQuestion)
+
+
+for(responses in c("Response")) {
+ p1 <- ggplot(ssoSubsetData, aes(y = sQuestion, fill = get(responses), xmin = 0, xmax = 1)) +
+    geom_bar(position = position_fill(reverse = TRUE), width = .8, color = "grey50", size = .1, show.legend = FALSE) +
+    facet_grid(Type~., scales = "free_y", space = "free", switch = "y") +
+    geom_fit_text(stat = "count", aes(label = ..count..), position=position_fill(reverse = TRUE), size = 8,  min.size = 5, padding.x = grid::unit(0, "mm"), padding.y = grid::unit(0, "mm"), reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+    scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+    scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}) +
+    guides(fill = guide_legend(nrow = 1, byrow = TRUE)) +
+    theme_minimal(base_size = 10) +
+    theme(
+      plot.margin = margin(l = 0, r = 3),
+      plot.title = element_blank(),
+      axis.title = element_blank(),
+      axis.line.y = element_line(color = "grey50"),
+      axis.text.x = element_blank(),
+      legend.title = element_blank(),
+      legend.position = "bottom",
+      legend.justification = c("center", "top"),
+      legend.key.size = unit(8, 'pt'),
+      legend.box.margin = margin(),
+      panel.grid.major.y = element_blank(),
+      strip.text = element_text(color = "grey30")
+    )  
+
+ p2 <- ggplot(appSubsetData, aes(y = aQuestion, fill = get(responses), xmin = 0, xmax = 1)) +
+    geom_bar(position = position_fill(reverse = TRUE), width = .8, color = "grey50", size = .1) +
+    facet_grid(Type~., scales = "free_y", space = "free", switch = "y") +
+    geom_fit_text(stat = "count", aes(label = ..count..), position=position_fill(reverse = TRUE), size = 8, min.size = 5, padding.x = grid::unit(0, "mm"), padding.y = grid::unit(0, "mm"), reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+    scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+    scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}) +
+    guides(fill = guide_legend(nrow = 2, byrow = TRUE)) +
+    theme_minimal(base_size = 10) +
+    theme(
+      plot.margin = margin(l = 0, r = 3),
+      plot.title = element_blank(),
+      axis.title = element_blank(),
+      axis.line.y = element_line(color = "grey50"),
+      legend.title = element_blank(),
+      legend.position = "bottom",
+      legend.justification = c("center", "top"),
+      legend.key.size = unit(8, 'pt'),
+      legend.box.margin = margin(),
+      panel.grid.major.y = element_blank(),
+      strip.text = element_text(color = "grey30")
+    )
+  
+  plot_grid(p1, p2 + theme(legend.position = "none"), get_legend(p2), nrow = 3, rel_heights = c(1, 1.25, 0.4))
+  ggsave(str_glue("sso_app_agreement.pdf"), path = "./figures/", width = 3.17, height = 3 / 4 * 3.17, units = "in", device = "pdf")
+}
+
+plot_grid(p1, p2 + theme(legend.position = "none"), get_legend(p2), nrow = 3, rel_heights = c(1, 1.25, 0.4))
+```
+
+
+## Review SSO and APP
+
+```{r review_sso_and_app_bar_plot, echo=FALSE}
+
+appSubsetData <- data.frame(subset(surveyData$app_how_often_review, !is.na(surveyData$app_how_often_review)))
+colnames(appSubsetData) <- c("app_how_often_review")
+ssoSubsetData <- data.frame(subset(surveyData$sso_how_often_review, !is.na(surveyData$sso_how_often_review)))
+colnames(ssoSubsetData) <- c("sso_how_often_review")
+
+appSubsetDataTransformed <- appSubsetData %>%
+  transform(
+    review_app_how_often_review = factor(app_how_often_review, levels = c("Never", "Rarely", "Daily", "Weekly", "Monthly", "Yearly"))
+  ) %>%
+  select(starts_with(c("review_"))) %>%
+  pivot_longer(everything(),
+               names_to = "question",
+               names_transform = list("question" = ~ ordered(str_replace_all(.x, c("review_app_how_often_review" = "appReview")), levels = c("appReview"))),
+               values_to = "responses"
+  )
+
+ssoSubsetDataTransformed <- ssoSubsetData %>%
+  transform(
+    review_sso_how_often_review = factor(sso_how_often_review, levels = c("Never", "Rarely", "Daily", "Weekly", "Monthly", "Yearly"))
+  ) %>%
+  select(starts_with(c("review_"))) %>%
+  pivot_longer(everything(),
+               names_to = "question",
+               names_transform = list("question" = ~ ordered(str_replace_all(.x, c("review_sso_how_often_review" = "ssoReview")), levels = c("ssoReview"))),
+               values_to = "responses"
+  )
+
+
+p1 <- ggplot(ssoSubsetDataTransformed, aes(y = "question", fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1, show.legend = FALSE) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position=position_fill(reverse = TRUE), size = 8,  min.size = 7, reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  facet_wrap(question~., ncol = 1, labeller = labeller("question" = as_labeller(function(x){str_wrap(questionsStrings[x], 65)}))) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_fill_brewer(palette = "Set1", labels = function(x){str_trunc(x, 38)}) +
+  guides(fill = guide_legend(reverse = TRUE, nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(l = 3),
+    plot.title.position = "plot",
+    plot.title = element_blank(),
+    strip.text = element_text(hjust = 0, size = 7),
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.text.y = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  ) 
+
+p2 <- ggplot(appSubsetDataTransformed, aes(y = "question", fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position=position_fill(reverse = TRUE), size = 8,  min.size = 7, reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  facet_wrap(question~., ncol = 1, labeller = labeller("question" = as_labeller(function(x){str_wrap(questionsStrings[x], 65)}))) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_fill_brewer(palette = "Set1", labels = function(x){str_trunc(x, 38)}) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(l = 3),
+    plot.title.position = "plot",
+    plot.title = element_blank(),
+    strip.text = element_text(hjust = 0, size = 7),
+    axis.title = element_blank(),
+    axis.text.y = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  ) 
+
+plot_grid(p1, p2 + theme(legend.position = "none"), get_legend(p2), nrow = 3, rel_heights = c(1, 1.15, 0.5))
+ggsave("./figures/review_app_sso_how_often.pdf", width = 3.17, height = 3/4 * 3.17, units = "in", device = "pdf")
+```
+
+
+## Reminders and Reapproval Bar Plot
+
+```{r reminders_reapprove_bar_plot, echo=FALSE}
+p <- surveyData %>%
+  transform(
+    fut_remind = factor(str_replace(fut_remind, "I do not want to be reminded", "Not at all"), levels = c("Once every three years", "Once a year", "Once a month", "Once a week", "Not at all")),
+    fut_reapprove = factor(str_replace(fut_reapprove, "I do not want to reapprove apps", "Not at all"), levels = c("Once every three years", "Once a year", "Once a month", "Once a week", "Not at all"))
+  ) %>%
+  drop_na(fut_remind, fut_reapprove) %>%
+  select(main_survey_participant_id, starts_with(c("fut_r"))) %>%
+  pivot_longer(-main_survey_participant_id,
+               names_to = "future",
+               names_pattern = "fut_(.+)",
+               names_transform = list("future" = ~ ordered(str_replace_all(.x, c("remind" = "Reminder", "reapprove" = "Reapprove")), levels = c("Reminder", "Reapprove"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = future, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position=position_fill(reverse = TRUE), size = 8,  min.size = 7, reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(limits = rev) +
+  scale_fill_brewer(palette = "Set1", labels = function(x){str_trunc(x, 38)}) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 3),
+    plot.title.position = "plot",
+    plot.title = element_blank(),
+    strip.text = element_text(hjust = 0),
+    axis.title = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  ) 
+  
+plot_grid(p + theme(legend.position = "none"), get_legend(p), nrow = 2, rel_heights = c(1, 0.3))
+ggsave("./figures/reminders_reapproval.pdf", width = 3.17, height = 9/16 * 3.17, units = "in", device = "pdf")
+```
+
+
+## Understanding linked and access
+
+```{r understanding_linked_access_bar_plot, echo=FALSE}
+p <- surveyData %>%
+    transform(
+    rfl_understand_link = factor(rfl_understand_link, levels = c("Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree")),
+    rfl_understand_access = factor(rfl_understand_access, levels = c("Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"))
+  ) %>%
+  select(main_survey_participant_id, starts_with(c("rfl_understand_"))) %>%
+  pivot_longer(-main_survey_participant_id,
+               names_to = "reflection",
+               names_pattern = "rfl_understand_(.+)",
+               names_transform = list("reflection" = ~ ordered(str_replace_all(.x, c("link" = "Apps Linked", "access" = "Parts Accessed")), levels = c("Parts Accessed", "Apps Linked"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = reflection, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8,  min.size = 7, reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(15)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  labs(
+    "title" = str_wrap("The \"Apps with access to your account\" page helps me to better understand...", 45)
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 3),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    # axis.text.y = element_text(size = 7),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    # legend.text = element_text(size = 7),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  )
+  
+plot_grid(get_title(p), p + theme(plot.title = element_blank(), legend.position = "none"), get_legend(p), nrow = 3, rel_heights = c(.5, 1, 0.4))
+ggsave("./figures/understanding_link_access.pdf", width = 3.17, height = 9/16 * 3.17, units = "in", device = "pdf")
+
+```
+
+
+## Recall using SSO granting third party
+
+```{r recall_using_sso_granting_thrid_party_bar_plot, echo=FALSE}
+p <- preSurveyData %>%
+  select(c(google_recall_sso, google_recall_app)) %>%
+  drop_na(google_recall_sso, google_recall_app) %>%
+  pivot_longer(c(google_recall_sso, google_recall_app),
+               names_to = "question",
+               names_transform = list("question" = ~ ordered(str_replace_all(.x, c("google_recall_sso" = "recallSSO", "google_recall_app" = "recallApp")), levels = c("recallSSO", "recallApp"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = "question", fill = fct_relevel(responses, "Unsure", after = 1), xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(), width = .6, color = "grey50", size = .1) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position=position_fill(), size = 8,  min.size = 7, reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  facet_wrap(question~., ncol = 1, labeller = labeller("question" = as_labeller(function(x){str_wrap(questionsStrings[x], 65)}))) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_fill_brewer(palette = "Set1", direction = -1) +
+  guides(fill = guide_legend(reverse = TRUE, keywidth = unit(8, 'pt'), keyheight = unit(8, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(l = 3),
+    plot.title.position = "plot",
+    plot.title = element_blank(),
+    strip.text = element_text(hjust = 0, size = 7),
+    axis.title = element_blank(),
+    axis.text.y = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  ) 
+  
+plot_grid(p + theme(legend.position = "none"), get_legend(p), nrow = 2, rel_heights = c(1, 0.1))
+ggsave("./figures/recall_using_sso_granting_third_party.pdf", width = 3.17, height = 9/16 * 3.17, units = "in", device = "pdf")
+
+```
+
+
+## Change settings and six month review
+
+```{r settings_review_bar_plot, echo=FALSE}
+p <- surveyData %>%
+  select(c(rfl_change_settings, rfl_six_month_review)) %>%
+  pivot_longer(c(rfl_change_settings, rfl_six_month_review),
+               names_to = "question",
+               names_transform = list("question" = ~ ordered(str_replace_all(.x, c("rfl_change_settings" = "changingSettings", "rfl_six_month_review" = "reviewApps")), levels = c("changingSettings", "reviewApps"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = "question", fill = fct_relevel(responses, "Unsure", after = 1), xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(), width = .6, color = "grey50", size = .1) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position=position_fill(), size = 8,  min.size = 7, reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  facet_wrap(question~., ncol = 1, labeller = labeller("question" = as_labeller(function(x){str_wrap(questionsStrings[x], 65)}))) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_fill_brewer(palette = "Set1", direction = -1) +
+  guides(fill = guide_legend(reverse = TRUE, keywidth = unit(8, 'pt'), keyheight = unit(8, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(l = 3),
+    plot.title.position = "plot",
+    plot.title = element_blank(),
+    strip.text = element_text(hjust = 0, size = 7),
+    axis.title = element_blank(),
+    axis.text.y = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  ) 
+  
+plot_grid(p + theme(legend.position = "none"), get_legend(p), nrow = 2, rel_heights = c(1, 0.1))
+ggsave("./figures/change_settings_review_apps.pdf", width = 3.17, height = 3/4 * 3.17, units = "in", device = "pdf")
+
+```
+
+## Approve every and block data
+
+```{r approve_every_block_data_bar_plot, echo=FALSE}
+p <- surveyData %>%
+  transform(
+    fut_approve_every = factor(fut_approve_every, levels = c("Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree")),
+    fut_block_data = factor(fut_block_data, levels = c("Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"))
+  ) %>%
+  drop_na(fut_approve_every, fut_block_data) %>%
+  select(c(fut_approve_every, fut_block_data)) %>%
+  pivot_longer(c(fut_approve_every, fut_block_data),
+               names_to = "question",
+               names_transform = list("question" = ~ ordered(str_replace_all(.x, c("fut_approve_every" = "approveEvery", "fut_block_data" = "blockData")), levels = c("approveEvery", "blockData"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = "question", fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8,  min.size = 3, padding.x = grid::unit(0, "mm"), padding.y = grid::unit(0, "mm"), reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  facet_wrap(question~., ncol = 1, labeller = labeller("question" = as_labeller(function(x){str_wrap(questionsStrings[x], 60)}))) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(l = 3),
+    plot.title.position = "plot",
+    plot.title = element_blank(),
+    strip.text = element_text(hjust = 0, size = 8),
+    axis.title = element_blank(),
+    axis.text.y = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  ) 
+  
+plot_grid(p + theme(legend.position = "none"), get_legend(p), nrow = 2, rel_heights = c(1, 0.2))
+ggsave("./figures/approve_every_block_data.pdf", width = 3.17, height = 3/4 * 3.17, units = "in", device = "pdf")
+
+```
+
+## How confident permission category
+
+```{r how_confident_permission_category_bar_plot, echo=FALSE}
+
+
+l <- ggplot() +
+  labs(
+    "title" = str_wrap("How confident are you that you understand what each permission allows the app to do?", 45)
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(l = 3, t = 3, b = 3, r = 3),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10)
+  )
+
+p1 <- permissionCategoryData %>%
+    select(basic_account_info_understand) %>%
+  drop_na(basic_account_info_understand) %>%
+    transform(
+    basic_account_info_understand = factor(basic_account_info_understand, levels = c("Not confident", "Slightly confident", "Moderately confident", "Confident", "Very confident"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "understand",
+               names_pattern = "(.+)_understand",
+               names_transform = list("understand" = ~ ordered(str_replace_all(.x, c("basic_account_info" = "Basic Account Info")), levels = c("Basic Account Info"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = understand, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1, show.legend = FALSE) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8,  min.size = 7, reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(5)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  )
+
+p2 <- permissionCategoryData %>%
+    select(gmail_understand) %>%
+  drop_na(gmail_understand) %>% 
+    transform(
+    gmail_understand = factor(gmail_understand, levels = c("Not confident", "Slightly confident", "Moderately confident", "Confident", "Very confident"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "understand",
+               names_pattern = "(.+)_understand",
+               names_transform = list("understand" = ~ ordered(str_replace_all(.x, c("gmail" = "Gmail")), levels = c("Gmail"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = understand, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1, show.legend = FALSE) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8,  min.size = 7, reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(5)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  )
+
+p3 <- permissionCategoryData %>%
+    select(google_drive_understand) %>%
+  drop_na(google_drive_understand) %>% 
+    transform(
+    google_drive_understand = factor(google_drive_understand, levels = c("Not confident", "Slightly confident", "Moderately confident", "Confident", "Very confident"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "understand",
+               names_pattern = "(.+)_understand",
+               names_transform = list("understand" = ~ ordered(str_replace_all(.x, c("google_drive" = "Google Drive")), levels = c("Google Drive"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = understand, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1, show.legend = FALSE) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8,  min.size = 7, reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(5)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  )  
+
+p4 <- permissionCategoryData %>%
+    select(additional_access_understand) %>%
+  drop_na(additional_access_understand) %>% 
+    transform(
+    additional_access_understand = factor(additional_access_understand, levels = c("Not confident", "Slightly confident", "Moderately confident", "Confident", "Very confident"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "understand",
+               names_pattern = "(.+)_understand",
+               names_transform = list("understand" = ~ ordered(str_replace_all(.x, c("additional_access" = "Additional Access")), levels = c("Additional Access"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = understand, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1, show.legend = FALSE) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8,  min.size = 7, reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(5)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  labs(
+    "title" = str_wrap("How confident are you that you understand what each permission allows the app to do?", 50)
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  ) 
+
+p5 <- permissionCategoryData %>%
+    select(google_contacts_understand) %>%
+  drop_na(google_contacts_understand) %>% 
+    transform(
+    google_contacts_understand = factor(google_contacts_understand, levels = c("Not confident", "Slightly confident", "Moderately confident", "Confident", "Very confident"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "understand",
+               names_pattern = "(.+)_understand",
+               names_transform = list("understand" = ~ ordered(str_replace_all(.x, c("google_contacts" = "Google Contacts")), levels = c("Google Contacts"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = understand, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1, show.legend = FALSE) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8,  min.size = 7, reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(5)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  )
+
+p6 <- permissionCategoryData %>%
+    select(google_calendar_understand) %>%
+  drop_na(google_calendar_understand) %>% 
+    transform(
+    google_calendar_understand = factor(google_calendar_understand, levels = c("Not confident", "Slightly confident", "Moderately confident", "Confident", "Very confident"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "understand",
+               names_pattern = "(.+)_understand",
+               names_transform = list("understand" = ~ ordered(str_replace_all(.x, c("google_calendar" = "Google Calendar")), levels = c("Google Calendar"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = understand, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8,  min.size = 7, reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(5)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0, b = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.key.size = unit(6, 'pt'),
+    legend.box.margin = margin(),
+    legend.justification = c(0, 1),
+    legend.margin = margin(t = -5, r = 0, b = 0, l = -40, unit = "pt"),
+    panel.grid.major.y = element_blank()
+  )
+
+p4 / p5 / p1 / p2 / p3 / p6
+ggsave("./figures/how_confident_permission_category.pdf", width = 3.17, height = 3.17, units = "in", device = "pdf")
+
+```
+
+## How necessary permission category
+
+```{r how_necessary_permission_category_bar_plot, echo=FALSE}
+
+p1 <- permissionCategoryData %>%
+    select(basic_account_info_necessary) %>%
+  drop_na(basic_account_info_necessary) %>%
+    transform(
+    basic_account_info_necessary = factor(basic_account_info_necessary, levels = c("Not necessary", "Slightly necessary", "Moderately necessary", "Necessary", "Very necessary"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "necessary",
+               names_pattern = "(.+)_necessary",
+               names_transform = list("necessary" = ~ ordered(str_replace_all(.x, c("basic_account_info" = "Basic Account Info")), levels = c("Basic Account Info"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = necessary, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1, show.legend = FALSE) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8,  min.size = 7, reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(5)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  )
+
+p2 <- permissionCategoryData %>%
+    select(gmail_necessary) %>%
+  drop_na(gmail_necessary) %>% 
+    transform(
+    gmail_necessary = factor(gmail_necessary, levels = c("Not necessary", "Slightly necessary", "Moderately necessary", "Necessary", "Very necessary"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "necessary",
+               names_pattern = "(.+)_necessary",
+               names_transform = list("necessary" = ~ ordered(str_replace_all(.x, c("gmail" = "Gmail")), levels = c("Gmail"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = necessary, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1, show.legend = FALSE) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8,  min.size = 7, reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(5)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  )
+
+p3 <- permissionCategoryData %>%
+    select(google_drive_necessary) %>%
+  drop_na(google_drive_necessary) %>% 
+    transform(
+    google_drive_necessary = factor(google_drive_necessary, levels = c("Not necessary", "Slightly necessary", "Moderately necessary", "Necessary", "Very necessary"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "necessary",
+               names_pattern = "(.+)_necessary",
+               names_transform = list("necessary" = ~ ordered(str_replace_all(.x, c("google_drive" = "Google Drive")), levels = c("Google Drive"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = necessary, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1, show.legend = FALSE) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8,  min.size = 7, reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(5)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  )  
+
+p4 <- permissionCategoryData %>%
+    select(additional_access_necessary) %>%
+  drop_na(additional_access_necessary) %>% 
+    transform(
+    additional_access_necessary = factor(additional_access_necessary, levels = c("Not necessary", "Slightly necessary", "Moderately necessary", "Necessary", "Very necessary"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "necessary",
+               names_pattern = "(.+)_necessary",
+               names_transform = list("necessary" = ~ ordered(str_replace_all(.x, c("additional_access" = "Additional Access")), levels = c("Additional Access"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = necessary, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1, show.legend = FALSE) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8,  min.size = 7, reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(5)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  ) 
+
+p5 <- permissionCategoryData %>%
+    select(google_contacts_necessary) %>%
+  drop_na(google_contacts_necessary) %>% 
+    transform(
+    google_contacts_necessary = factor(google_contacts_necessary, levels = c("Not necessary", "Slightly necessary", "Moderately necessary", "Necessary", "Very necessary"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "necessary",
+               names_pattern = "(.+)_necessary",
+               names_transform = list("necessary" = ~ ordered(str_replace_all(.x, c("google_contacts" = "Google Contacts")), levels = c("Google Contacts"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = necessary, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1, show.legend = FALSE) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8,  min.size = 7, reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(5)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  labs(
+    "title" = str_wrap("How necessary do you think each permission is for the app to function in a way that benefits you?", 52)
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  )
+
+p6 <- permissionCategoryData %>%
+    select(google_calendar_necessary) %>%
+  drop_na(google_calendar_necessary) %>% 
+    transform(
+    google_calendar_necessary = factor(google_calendar_necessary, levels = c("Not necessary", "Slightly necessary", "Moderately necessary", "Necessary", "Very necessary"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "necessary",
+               names_pattern = "(.+)_necessary",
+               names_transform = list("necessary" = ~ ordered(str_replace_all(.x, c("google_calendar" = "Google Calendar")), levels = c("Google Calendar"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = necessary, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8,  min.size = 7, reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(5)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0, b = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.key.size = unit(6, 'pt'),
+    legend.box.margin = margin(),
+    legend.justification = c(0, 1),
+    legend.margin = margin(t = -5, r = 0, b = 0, l = -40, unit = "pt"),
+    panel.grid.major.y = element_blank()
+  )
+
+p5 / p1 / p4 / p2 / p3 / p6
+ggsave("./figures/how_necessary_permission_category.pdf", width = 3.17, height = 3.17, units = "in", device = "pdf")
+
+```
+
+
+## How concerned permission category
+
+```{r how_concerned_permission_category_bar_plot, echo=FALSE}
+
+p1 <- permissionCategoryData %>%
+    select(basic_account_info_concerned) %>%
+  drop_na(basic_account_info_concerned) %>%
+    transform(
+    basic_account_info_concerned = factor(basic_account_info_concerned, levels = c("Very concerned", "Concerned", "Moderately concerned", "Slightly concerned", "Not concerned"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "concerned",
+               names_pattern = "(.+)_concerned",
+               names_transform = list("concerned" = ~ ordered(str_replace_all(.x, c("basic_account_info" = "Basic Account Info")), levels = c("Basic Account Info"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = concerned, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1, show.legend = FALSE) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8, min.size = 3, padding.x = grid::unit(0, "mm"), reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(5)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  )
+
+p2 <- permissionCategoryData %>%
+    select(gmail_concerned) %>%
+  drop_na(gmail_concerned) %>% 
+    transform(
+    gmail_concerned = factor(gmail_concerned, levels = c("Very concerned", "Concerned", "Moderately concerned", "Slightly concerned", "Not concerned"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "concerned",
+               names_pattern = "(.+)_concerned",
+               names_transform = list("concerned" = ~ ordered(str_replace_all(.x, c("gmail" = "Gmail")), levels = c("Gmail"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = concerned, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1, show.legend = FALSE) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8, min.size = 3, padding.x = grid::unit(0, "mm"), reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(5)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  labs(
+    "title" = str_wrap("How concerned are you about the app accessing your account using these permissions?", 45)
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  )
+
+p3 <- permissionCategoryData %>%
+    select(google_drive_concerned) %>%
+  drop_na(google_drive_concerned) %>% 
+    transform(
+    google_drive_concerned = factor(google_drive_concerned, levels = c("Very concerned", "Concerned", "Moderately concerned", "Slightly concerned", "Not concerned"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "concerned",
+               names_pattern = "(.+)_concerned",
+               names_transform = list("concerned" = ~ ordered(str_replace_all(.x, c("google_drive" = "Google Drive")), levels = c("Google Drive"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = concerned, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1, show.legend = FALSE) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8, min.size = 3, padding.x = grid::unit(0, "mm"), reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(5)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  )  
+
+p4 <- permissionCategoryData %>%
+    select(additional_access_concerned) %>%
+  drop_na(additional_access_concerned) %>% 
+    transform(
+    additional_access_concerned = factor(additional_access_concerned, levels = c("Very concerned", "Concerned", "Moderately concerned", "Slightly concerned", "Not concerned"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "concerned",
+               names_pattern = "(.+)_concerned",
+               names_transform = list("concerned" = ~ ordered(str_replace_all(.x, c("additional_access" = "Additional Access")), levels = c("Additional Access"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = concerned, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1, show.legend = FALSE) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8, min.size = 3, padding.x = grid::unit(0, "mm"), reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(5)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  ) 
+
+p5 <- permissionCategoryData %>%
+    select(google_contacts_concerned) %>%
+  drop_na(google_contacts_concerned) %>% 
+    transform(
+    google_contacts_concerned = factor(google_contacts_concerned, levels = c("Very concerned", "Concerned", "Moderately concerned", "Slightly concerned", "Not concerned"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "concerned",
+               names_pattern = "(.+)_concerned",
+               names_transform = list("concerned" = ~ ordered(str_replace_all(.x, c("google_contacts" = "Google Contacts")), levels = c("Google Contacts"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = concerned, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1, show.legend = FALSE) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8, min.size = 3, padding.x = grid::unit(0, "mm"), reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(5)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  )
+
+p6 <- permissionCategoryData %>%
+    select(google_calendar_concerned) %>%
+  drop_na(google_calendar_concerned) %>% 
+    transform(
+    google_calendar_concerned = factor(google_calendar_concerned, levels = c("Very concerned", "Concerned", "Moderately concerned", "Slightly concerned", "Not concerned"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "concerned",
+               names_pattern = "(.+)_concerned",
+               names_transform = list("concerned" = ~ ordered(str_replace_all(.x, c("google_calendar" = "Google Calendar")), levels = c("Google Calendar"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = concerned, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8, min.size = 3, padding.x = grid::unit(0, "mm"), reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(5)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0, b = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.key.size = unit(6, 'pt'),
+    legend.box.margin = margin(),
+    legend.justification = c(0, 1),
+    legend.margin = margin(t = -5, r = 0, b = 0, l = -40, unit = "pt"),
+    panel.grid.major.y = element_blank()
+  )
+
+p2 / p5 / p4 / p3 / p1 / p6
+ggsave("./figures/how_concerned_permission_category.pdf", width = 3.17, height = 3.17, units = "in", device = "pdf")
+
+```
+
+
+## How confident permission
+
+```{r how_confident_permission_bar_plot, echo=FALSE}
+
+p1 <- permissionData %>%
+    select(perm1_understand) %>%
+  drop_na(perm1_understand) %>%
+    transform(
+    perm1_understand = factor(perm1_understand, levels = c("Not confident", "Slightly confident", "Moderately confident", "Confident", "Very confident"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "understand",
+               names_pattern = "(.+)_understand",
+               names_transform = list("understand" = ~ ordered(str_replace_all(.x, c("perm1" = "View Gmail Address")), levels = c("View Gmail Address"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = understand, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8, min.size = 7, padding.x = grid::unit(0, "mm"), reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(12)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0, b = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.key.size = unit(6, 'pt'),
+    legend.box.margin = margin(),
+    legend.justification = c(0, 1),
+    legend.margin = margin(t = -5, r = 0, b = 0, l = -45, unit = "pt"),
+    panel.grid.major.y = element_blank()
+  )
+
+p2 <- permissionData %>%
+    select(perm2_understand) %>%
+  drop_na(perm2_understand) %>% 
+    transform(
+    perm2_understand = factor(perm2_understand, levels = c("Not confident", "Slightly confident", "Moderately confident", "Confident", "Very confident"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "understand",
+               names_pattern = "(.+)_understand",
+               names_transform = list("understand" = ~ ordered(str_replace_all(.x, c("perm2" = "View Personal Info")), levels = c("View Personal Info"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = understand, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1, show.legend = FALSE) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8, min.size = 7, padding.x = grid::unit(0, "mm"), reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(12)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  labs(
+    "title" = str_wrap("How confident are you that you understand what each permission allows the app to do?", 50)
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  )
+
+p3 <- permissionData %>%
+    select(perm3_understand) %>%
+  drop_na(perm3_understand) %>% 
+    transform(
+    perm3_understand = factor(perm3_understand, levels = c("Not confident", "Slightly confident", "Moderately confident", "Confident", "Very confident"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "understand",
+               names_pattern = "(.+)_understand",
+               names_transform = list("understand" = ~ ordered(str_replace_all(.x, c("perm3" = "Modify Gmail")), levels = c("Modify Gmail"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = understand, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1, show.legend = FALSE) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8, min.size = 7, padding.x = grid::unit(0, "mm"), reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(12)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  )  
+
+p4 <- permissionData %>%
+    select(perm4_understand) %>%
+  drop_na(perm4_understand) %>% 
+    transform(
+    perm4_understand = factor(perm4_understand, levels = c("Not confident", "Slightly confident", "Moderately confident", "Confident", "Very confident"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "understand",
+               names_pattern = "(.+)_understand",
+               names_transform = list("understand" = ~ ordered(str_replace_all(.x, c("perm4" = "Modify Contacts")), levels = c("Modify Contacts"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = understand, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1, show.legend = FALSE) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8, min.size = 7, padding.x = grid::unit(0, "mm"), reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(12)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  ) 
+
+p5 <- permissionData %>%
+    select(perm5_understand) %>%
+  drop_na(perm5_understand) %>% 
+    transform(
+    perm5_understand = factor(perm5_understand, levels = c("Not confident", "Slightly confident", "Moderately confident", "Confident", "Very confident"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "understand",
+               names_pattern = "(.+)_understand",
+               names_transform = list("understand" = ~ ordered(str_replace_all(.x, c("perm5" = "Modify Google Play")), levels = c("Modify Google Play"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = understand, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1, show.legend = FALSE) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8, min.size = 7, padding.x = grid::unit(0, "mm"), reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(12)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  )
+
+p6 <- permissionData %>%
+    select(perm6_understand) %>%
+  drop_na(perm6_understand) %>% 
+    transform(
+    perm6_understand = factor(perm6_understand, levels = c("Not confident", "Slightly confident", "Moderately confident", "Confident", "Very confident"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "understand",
+               names_pattern = "(.+)_understand",
+               names_transform = list("understand" = ~ ordered(str_replace_all(.x, c("perm6" = "Modify Google Calendar")), levels = c("Modify Google Calendar"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = understand, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1, show.legend = FALSE) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8, min.size = 7, padding.x = grid::unit(0, "mm"), reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(12)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  )
+
+p2 / p3 / p4 / p5 / p6 / p1
+ggsave("./figures/how_confident_permission.pdf", width = 3.17, height = 3.17, units = "in", device = "pdf")
+
+```
+
+
+## How necessary permission
+
+```{r how_necessary_permission_bar_plot, echo=FALSE}
+
+p1 <- permissionData %>%
+    select(perm1_necessary) %>%
+  drop_na(perm1_necessary) %>%
+    transform(
+    perm1_necessary = factor(perm1_necessary, levels = c("Not necessary", "Slightly necessary", "Moderately necessary", "Necessary", "Very necessary"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "necessary",
+               names_pattern = "(.+)_necessary",
+               names_transform = list("necessary" = ~ ordered(str_replace_all(.x, c("perm1" = "View Gmail Address")), levels = c("View Gmail Address"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = necessary, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1, show.legend = FALSE) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8, min.size = 7, padding.x = grid::unit(0, "mm"), reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(12)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  )
+
+p2 <- permissionData %>%
+    select(perm2_necessary) %>%
+  drop_na(perm2_necessary) %>% 
+    transform(
+    perm2_necessary = factor(perm2_necessary, levels = c("Not necessary", "Slightly necessary", "Moderately necessary", "Necessary", "Very necessary"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "necessary",
+               names_pattern = "(.+)_necessary",
+               names_transform = list("necessary" = ~ ordered(str_replace_all(.x, c("perm2" = "View Personal Info")), levels = c("View Personal Info"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = necessary, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1, show.legend = FALSE) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8, min.size = 7, padding.x = grid::unit(0, "mm"), reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(12)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  labs(
+    "title" = str_wrap("How necessary do you think each permission is for the app to function in a way that benefits you?", 52)
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  )
+
+p3 <- permissionData %>%
+    select(perm3_necessary) %>%
+  drop_na(perm3_necessary) %>% 
+    transform(
+    perm3_necessary = factor(perm3_necessary, levels = c("Not necessary", "Slightly necessary", "Moderately necessary", "Necessary", "Very necessary"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "necessary",
+               names_pattern = "(.+)_necessary",
+               names_transform = list("necessary" = ~ ordered(str_replace_all(.x, c("perm3" = "Modify Gmail")), levels = c("Modify Gmail"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = necessary, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8, min.size = 7, padding.x = grid::unit(0, "mm"), reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(12)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0, b = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.key.size = unit(6, 'pt'),
+    legend.box.margin = margin(),
+    legend.justification = c(0, 1),
+    legend.margin = margin(t = -5, r = 0, b = 0, l = -50, unit = "pt"),
+    panel.grid.major.y = element_blank()
+  )
+
+p4 <- permissionData %>%
+    select(perm4_necessary) %>%
+  drop_na(perm4_necessary) %>% 
+    transform(
+    perm4_necessary = factor(perm4_necessary, levels = c("Not necessary", "Slightly necessary", "Moderately necessary", "Necessary", "Very necessary"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "necessary",
+               names_pattern = "(.+)_necessary",
+               names_transform = list("necessary" = ~ ordered(str_replace_all(.x, c("perm4" = "Modify Contacts")), levels = c("Modify Contacts"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = necessary, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1, show.legend = FALSE) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8, min.size = 7, padding.x = grid::unit(0, "mm"), reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(12)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  ) 
+
+p5 <- permissionData %>%
+    select(perm5_necessary) %>%
+  drop_na(perm5_necessary) %>% 
+    transform(
+    perm5_necessary = factor(perm5_necessary, levels = c("Not necessary", "Slightly necessary", "Moderately necessary", "Necessary", "Very necessary"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "necessary",
+               names_pattern = "(.+)_necessary",
+               names_transform = list("necessary" = ~ ordered(str_replace_all(.x, c("perm5" = "Modify Google Play")), levels = c("Modify Google Play"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = necessary, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1, show.legend = FALSE) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8, min.size = 7, padding.x = grid::unit(0, "mm"), reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(12)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  )
+
+p6 <- permissionData %>%
+    select(perm6_necessary) %>%
+  drop_na(perm6_necessary) %>% 
+    transform(
+    perm6_necessary = factor(perm6_necessary, levels = c("Not necessary", "Slightly necessary", "Moderately necessary", "Necessary", "Very necessary"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "necessary",
+               names_pattern = "(.+)_necessary",
+               names_transform = list("necessary" = ~ ordered(str_replace_all(.x, c("perm6" = "Modify Google Calendar")), levels = c("Modify Google Calendar"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = necessary, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1, show.legend = FALSE) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8, min.size = 7, padding.x = grid::unit(0, "mm"), reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(12)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  )
+
+p2 / p4 / p5 / p6 / p1 / p3
+ggsave("./figures/how_necessary_permission.pdf", width = 3.17, height = 3.17, units = "in", device = "pdf")
+
+```
+
+
+## How concerned permission
+
+```{r how_concerned_permission_bar_plot, echo=FALSE}
+
+p1 <- permissionData %>%
+    select(perm1_concerned) %>%
+  drop_na(perm1_concerned) %>%
+    transform(
+    perm1_concerned = factor(perm1_concerned, levels = c("Very concerned", "Concerned", "Moderately concerned", "Slightly concerned", "Not concerned"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "concerned",
+               names_pattern = "(.+)_concerned",
+               names_transform = list("concerned" = ~ ordered(str_replace_all(.x, c("perm1" = "View Gmail Address")), levels = c("View Gmail Address"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = concerned, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1, show.legend = FALSE) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8, min.size = 7, padding.x = grid::unit(0, "mm"), reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(12)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  )
+
+p2 <- permissionData %>%
+    select(perm2_concerned) %>%
+  drop_na(perm2_concerned) %>% 
+    transform(
+    perm2_concerned = factor(perm2_concerned, levels = c("Very concerned", "Concerned", "Moderately concerned", "Slightly concerned", "Not concerned"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "concerned",
+               names_pattern = "(.+)_concerned",
+               names_transform = list("concerned" = ~ ordered(str_replace_all(.x, c("perm2" = "View Personal Info")), levels = c("View Personal Info"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = concerned, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1, show.legend = FALSE) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8, min.size = 7, padding.x = grid::unit(0, "mm"), reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(12)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  labs(
+    "title" = str_wrap("How concerned are you about the app accessing your account using these permissions?", 45)
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  )
+
+p3 <- permissionData %>%
+    select(perm3_concerned) %>%
+  drop_na(perm3_concerned) %>% 
+    transform(
+    perm3_concerned = factor(perm3_concerned, levels = c("Very concerned", "Concerned", "Moderately concerned", "Slightly concerned", "Not concerned"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "concerned",
+               names_pattern = "(.+)_concerned",
+               names_transform = list("concerned" = ~ ordered(str_replace_all(.x, c("perm3" = "Modify Gmail")), levels = c("Modify Gmail"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = concerned, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1, show.legend = FALSE) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8, min.size = 7, padding.x = grid::unit(0, "mm"), reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(12)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  )  
+
+p4 <- permissionData %>%
+    select(perm4_concerned) %>%
+  drop_na(perm4_concerned) %>% 
+    transform(
+    perm4_concerned = factor(perm4_concerned, levels = c("Very concerned", "Concerned", "Moderately concerned", "Slightly concerned", "Not concerned"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "concerned",
+               names_pattern = "(.+)_concerned",
+               names_transform = list("concerned" = ~ ordered(str_replace_all(.x, c("perm4" = "Modify Contacts")), levels = c("Modify Contacts"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = concerned, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1, show.legend = FALSE) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8, min.size = 7, padding.x = grid::unit(0, "mm"), reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(12)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  ) 
+
+p5 <- permissionData %>%
+    select(perm5_concerned) %>%
+  drop_na(perm5_concerned) %>% 
+    transform(
+    perm5_concerned = factor(perm5_concerned, levels = c("Very concerned", "Concerned", "Moderately concerned", "Slightly concerned", "Not concerned"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "concerned",
+               names_pattern = "(.+)_concerned",
+               names_transform = list("concerned" = ~ ordered(str_replace_all(.x, c("perm5" = "Modify Google Play")), levels = c("Modify Google Play"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = concerned, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1, show.legend = FALSE) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8, min.size = 7, padding.x = grid::unit(0, "mm"), reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(12)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.justification = c("center", "top"),
+    legend.key.size = unit(8, 'pt'),
+    legend.box.margin = margin(),
+    panel.grid.major.y = element_blank()
+  )
+
+p6 <- permissionData %>%
+    select(perm6_concerned) %>%
+  drop_na(perm6_concerned) %>% 
+    transform(
+    perm6_concerned = factor(perm6_concerned, levels = c("Very concerned", "Concerned", "Moderately concerned", "Slightly concerned", "Not concerned"))
+  ) %>%
+  pivot_longer(everything(),
+               names_to = "concerned",
+               names_pattern = "(.+)_concerned",
+               names_transform = list("concerned" = ~ ordered(str_replace_all(.x, c("perm6" = "Modify Google Calendar")), levels = c("Modify Google Calendar"))),
+               values_to = "responses"
+  ) %>%
+  ggplot(aes(y = concerned, fill = responses, xmin = 0, xmax = 1)) +
+  geom_bar(position = position_fill(reverse = TRUE), width = .6, color = "grey50", size = .1) +
+  geom_fit_text(stat = "count", aes(label = ..count..), position = position_fill(reverse = TRUE), size = 8, min.size = 7, padding.x = grid::unit(0, "mm"), reflow = TRUE, contrast = TRUE, show.legend = FALSE) +
+  scale_x_continuous(expand = expansion(add = c(0, 0.05)), labels = scales::percent) +
+  scale_y_discrete(labels = wrap_format(12)) +
+  scale_fill_brewer(palette = "RdYlBu", labels = function(x){str_trunc(x, 18)}, drop = FALSE) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, keywidth = unit(7, 'pt'))) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.margin = margin(r = 0, b = 0),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, vjust = 0, size = 10),
+    axis.title = element_blank(),
+    axis.line.y = element_line(color = "grey50"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.key.size = unit(6, 'pt'),
+    legend.box.margin = margin(),
+    legend.justification = c(0, 1),
+    legend.margin = margin(t = -5, r = 0, b = 0, l = -50, unit = "pt"),
+    panel.grid.major.y = element_blank()
+  )
+
+p2 / p4 / p3 / p5 / p1 / p6
+ggsave("./figures/how_concerned_permission.pdf", width = 3.17, height = 3.17, units = "in", device = "pdf")
+
+```
+

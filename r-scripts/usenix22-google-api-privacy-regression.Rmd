@@ -1,0 +1,362 @@
+---
+title: "Security and Privacy Perceptions of Third-Party Application Access for Google Accounts (USENIX Security 2022)"
+author: "David G. Balash, Xiaoyuan Wu, Miles Grant, Irwin Reyes, and Adam J. Aviv"
+output: html_document
+knit: (function(input_file, encoding) {
+  out_dir <- './docs';
+  rmarkdown::render(input_file,
+ encoding=encoding,
+ output_file=file.path(dirname(input_file), out_dir, 'usenix22-google-api-privacy-regression.html'))})
+---
+
+```{r setup, include=FALSE}
+library(ordinal)
+library(MASS)
+library(tidyverse)
+library(ggalluvial)
+library(ggrepel)
+library(ggfittext)
+library(cowplot)
+library(scales)
+library(lubridate)
+library(broom)
+library(xtable)
+library(rstatix)
+library(car)
+library(patchwork)
+require(GGally)
+require(reshape2)
+require(lme4)
+require(compiler)
+require(parallel)
+require(boot)
+library(broom.mixed)
+
+# Define factor levels of categorical data
+factorLevels <- list(
+  #############################################################################
+  accountAge = c("More than 10 years", "Less than or about 10 years", "Less than or about 5 years", "Less than or about 1 year", "Less than 1 month", "Unsure"),
+  age = c("18 - 24", "25 - 34", "35 - 44", "45 - 54", "55 - 64", "65 or older", "Prefer not to disclose"),
+  agreement = c("Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"),
+  agreementIUIPC = c("Strongly disagree", "Somewhat disagree", "Disagree", "Neither agree nor disagree", "Somewhat agree", "Agree", "Strongly agree"),
+  background = c("I have an education in, or work in, the field of computer science, computer engineering or IT.", "I do not have an education in, nor do I work in, the field of computer science, computer engineering or IT.", "Prefer not to disclose"),
+  education = c("No schooling completed", "Some high school", "High school", "Some college", "Trade, technical, or vocational training", "Associate's Degree", "Bachelor's Degree", "Master's Degree", "Professional degree", "Doctorate", "Prefer not to disclose"),
+  gender = c("Woman", "Man", "Non-binary", "Prefer not to disclose"),
+  keepRemove = c("Keep", "Remove", "Unsure"),
+  lastTime = c("Today", "In the previous week", "In the previous month", "In the previous year", "More than a year ago", "Unsure"),
+  selection = c("newestApp", "oldestApp", "randomApp"),
+  yesNoUnsure = c("Yes", "No", "Unsure")
+  #############################################################################
+)
+
+# Read survey responses from csv to a data frame and set it up
+preSurveyData <- read.csv("../survey-data/PreSurveyDataR.csv", header = TRUE, sep = ",", encoding="UTF-8") %>%
+  # Add prefix to some variables (aka columns) to make them unique in the survey data
+  rename_with(~ paste("pre_survey", .x, sep = "_"), any_of(c("participant_id"))) %>%
+  # Convert all categorical variables to R factors
+  mutate(
+    across(iuipcQ1:iuipcQ8, ordered, levels = factorLevels$agreementIUIPC)
+  ) %>%
+  # Calculate IUIPC scales: collection, control, and awareness
+  # Response levels are converted to numeric values ranging from 1 (strongly disagree) to 7 (strongly agree)
+  rowwise() %>%
+  mutate(
+    # Aggregate the variables iuipcQ1 to iuipcQ2 to form the "control factor"
+    iuipc.control = mean(as.numeric(c_across(iuipcQ1:iuipcQ2))),
+    log.iuipc.control = log(iuipc.control),
+    # Aggregate the variables iuipcQ3 to iuipcQ4 to form the "awareness factor"
+    iuipc.awareness = mean(as.numeric(c_across(iuipcQ3:iuipcQ4))),
+    log.iuipc.awareness = log(iuipc.awareness),
+    # Aggregate the variables iuipcQ5 to iuipcQ8 to form the "collection factor"
+    iuipc.collection = mean(as.numeric(c_across(iuipcQ5:iuipcQ8))),
+    log.iuipc.collection = log(iuipc.collection),
+    # Aggregate the variables iuipcQ1 to iuipcQ8 to form the "combined IUIPC"
+    combinedIUIPC = mean(as.numeric(c_across(iuipcQ1:iuipcQ8))),
+    log.combinedIUIPC = log(combinedIUIPC),
+    
+    # Pre Survey Questions
+    google_how_long = ordered(google_how_long, levels = factorLevels$accountAge),
+    google_recall_app = ordered(google_recall_app, levels = factorLevels$yesNoUnsure),
+    google_recall_sso = ordered(google_recall_sso, levels = factorLevels$yesNoUnsure),
+    # Convert all demographic variables to R factors 
+    gender = fct_explicit_na(factor(gender, levels = factorLevels$gender), na_level = "Prefer not to disclose"),
+    age = fct_explicit_na(ordered(age, levels = factorLevels$age), na_level = "Prefer not to disclose"),
+    education = fct_explicit_na(ordered(education, levels = factorLevels$education), na_level = "Prefer not to disclose"),
+    background = fct_explicit_na(ordered(background, levels = factorLevels$background), na_level = "Prefer not to disclose")
+  ) 
+
+# Read app data results from csv to a data frame and set it up
+appData <- read.csv("../survey-data/AppAndSurveyDataR.csv", header = TRUE, sep = ",", encoding="UTF-8") %>%
+  # Add prefix to some variables (aka columns) to make them unique in the survey data
+  rename_with(~ paste("main_survey", .x, sep = "_"), any_of(c("participant_id"))) %>%
+  # Convert all categorical variables to R factors
+  mutate(
+    # keep_choice
+    keep_choice = ordered(keep_choice, levels = factorLevels$keepRemove),
+    
+    # selection
+    selection = ordered(selection, levels = factorLevels$selection),
+    
+    # last_use
+    last_use = ordered(last_use, levels = factorLevels$lastTime),
+    
+    # Convert all "agreement" variables to R factors
+    # access_beneficial
+    # access_concerned
+    # access_change
+    # rfl_understand_access
+    across(all_of(c("access_beneficial", "access_concerned", "access_change", "rfl_understand_access")), ordered, levels = factorLevels$agreement),
+
+    # Convert all "yes, no, unsure" variables to R factors
+    # recall
+    # aware_prior
+    across(all_of(c("recall", "aware_prior")), ordered, levels = factorLevels$yesNoUnsure)
+
+  ) 
+
+# Join pre and main survey data using the uuids from the "link_table.csv"
+surveyData <- read.csv("../survey-data/LinkTableDataR.csv", header = TRUE, sep = ",") %>%
+  left_join(preSurveyData, by = c("pre_survey_participant_id" = "pre_survey_participant_id")) %>%
+  left_join(appData, by = c("main_survey_participant_id" = "main_survey_participant_id"))
+
+
+
+###############################################################################
+# Regression Tables Name Mappings
+###############################################################################
+regressionTables.colNameMappings <- c(
+  "Factor" = "term",
+  "Estimate" = "estimate",
+  "Odds ratio" = "OR",
+  "Error" = "std.error",
+  "t value" = "t.value",
+  "z value" = "z.value",
+  "Conf. int." = "conf.int",
+  "Pr(\\textgreater\\textbar z\\textbar)" = "p.value",
+  " " = "signif"
+)
+
+
+###############################################################################
+# Function to Calculate pseudo R-squared
+###############################################################################
+aldrich_nelson_pR2 <- function( model, null_model = NULL ){
+  # implemented from " Goodness-of-Fit Measures for Probit and Logit*" by Hagle and Mitchell https://www.jstor.org/stable/pdf/2111590.pdf
+
+  lnL_1 <- logLik(model)
+  
+  if(is.null(null_model)){
+    lnL_0 <- logLik(update(model, ~1, trace = FALSE))
+  } else{
+    
+    lnL_0 <- logLik(null_model)
+  }
+  
+  LLR <- (lnL_0[1]-lnL_1[1])
+  
+  N <- nobs(model)
+  
+  R2 <-  -2 * LLR / (N - 2 * LLR)
+  return(R2 * 1.72)
+}
+
+###############################################################################
+# Function used to sample data
+###############################################################################
+sampler <- function(dat, clustervar, replace = TRUE, reps = 1) {
+    cid <- unique(dat[, clustervar[1]])
+    ncid <- length(cid)
+    recid <- sample(cid, size = ncid * reps, replace = TRUE)
+    if (replace) {
+        rid <- lapply(seq_along(recid), function(i) {
+            cbind(NewID = i, RowID = sample(which(dat[, clustervar] == recid[i]),
+                size = length(which(dat[, clustervar] == recid[i])), replace = TRUE))
+        })
+    } else {
+        rid <- lapply(seq_along(recid), function(i) {
+            cbind(NewID = i, RowID = which(dat[, clustervar] == recid[i]))
+        })
+    }
+    dat <- as.data.frame(do.call(rbind, rid))
+    dat$Replicate <- factor(cut(dat$NewID, breaks = c(1, ncid * 1:reps), include.lowest = TRUE,
+        labels = FALSE))
+    dat$NewID <- factor(dat$NewID)
+    return(dat)
+}
+
+```
+
+# Regression Models
+
+```{r regression_data, include=FALSE}
+# Bin and recode variables for regression analyses and store them as new data frame "regressionData"
+regressionData <- surveyData %>%
+  transmute(
+    #
+    pid = main_survey_participant_id,
+    
+    # selection
+    selection = selection,
+    selection.newestApp = selection == "newestApp",
+    selection.oldestApp = selection == "oldestApp",
+    selection.randomApp = selection == "randomApp",
+    selection.isNotRandomApp = selection != "randomApp",
+    
+    # keep_choice
+    keep_choice = keep_choice,
+    keep_choice.keep = keep_choice == "Keep",
+    keep_choice.remove = keep_choice == "Remove",
+    
+    # recall
+    recall = recall,
+    recall.yes = recall == "Yes",
+    recall.no = recall != "Yes",
+    
+    # google_recall_app
+    google_recall_app = google_recall_app,
+    google_recall_app.yes = google_recall_app == "Yes",
+    google_recall_app.no =  google_recall_app != "Yes",
+    
+    # aware_prior
+    aware_prior = aware_prior,
+    aware_prior.yes = aware_prior == "Yes",
+    aware_prior.no = aware_prior != "Yes",
+    
+    # last_use
+    last_use = last_use,
+    last_use.recent = last_use %in% c("Today", "In the previous week", "In the previous month"),
+    last_use.not_recent = last_use %in% c("In the previous year", "More than a year ago"),
+    last_use.more_than_year = last_use == "More than a year ago",
+    
+    # access_beneficial
+    access_beneficial = access_beneficial,
+    access_beneficial.is_yes = access_beneficial %in% c("Strongly agree", "Agree"),
+    access_beneficial.is_no = access_beneficial %in% c("Strongly disagree", "Disagree"),
+    
+    # access_concerned
+    access_concerned = access_concerned,
+    access_concerned.is_yes = access_concerned %in% c("Strongly agree", "Agree"),
+    access_concerned.is_no = access_concerned %in% c("Strongly disagree", "Disagree"),
+    
+    # access_change
+    access_change = access_change,
+    access_change.is_yes = access_change %in% c("Strongly agree", "Agree"),
+    access_change.is_no = access_change %in% c("Strongly disagree", "Disagree"),
+
+    # install_count
+    install_count = install_count,
+    install_count.is_high = install_count > 5,
+
+    # permissions_count (mean = 3.8 sd=2.3, median = 2)
+    permissions_count = permissions_count,
+    permissions_count.is_greater_than_median = permissions_count > 2,
+    permissions_count.is_less_than_median = permissions_count < 2,
+    permissions_count.is_low = permissions_count < 4,
+    permissions_count.is_high = permissions_count > 4,
+    permissions_count.is_very_high = permissions_count > 8,
+
+    # days_since_install (mean = 380, sd = 497)
+    days_since_install = days_since_install,
+    days_since_install.is_more_than_2_years = days_since_install > 730,
+    days_since_install.is_more_than_365 = days_since_install > 365,
+    days_since_install.is_less_than_365 = days_since_install < 365,
+    days_since_install.is_less_than_six_months = days_since_install < 183,
+    days_since_install.is_less_than_three_months = days_since_install < 91,
+    
+    # rfl_understand_access
+    rfl_understand_access = rfl_understand_access,
+    rfl_understand_access.is_yes = rfl_understand_access %in% c("Strongly agree", "Agree"),
+    rfl_understand_access.is_no = rfl_understand_access %in% c("Strongly disagree", "Disagree"),
+    
+    # IUIPC control scale
+    iuipc.control = iuipc.control,
+    log.iuipc.control = log.iuipc.control,
+    iuipc.control.binary = cut(iuipc.control, breaks = c(0, 3.5, 7), labels = c("Low", "High"), include.lowest = TRUE, ordered_result = TRUE),
+    iuipc.control.is_high = iuipc.control > 3.5,
+
+    # IUIPC awareness scale
+    iuipc.awareness = iuipc.awareness,
+    log.iuipc.awareness = log.iuipc.awareness,
+    iuipc.awareness.binary = cut(iuipc.awareness, breaks = c(0, 3.5, 7), labels = c("Low", "High"), include.lowest = TRUE, ordered_result = TRUE),
+    iuipc.awareness.is_high = iuipc.awareness > 3.5,
+
+    # IUIPC collection scale
+    iuipc.collection = iuipc.collection,
+    log.iuipc.collection = log.iuipc.collection,
+    iuipc.collection.binary = cut(iuipc.collection, breaks = c(0, 3.5, 7), labels = c("Low", "High"), include.lowest = TRUE, ordered_result = TRUE),
+    iuipc.collection.is_high = iuipc.collection > 3.5,
+
+    # Bin age
+    age = age,
+    age.binary = fct_collapse(age,
+                              "Young" = c("18 - 24", "25 - 34"),
+                              other_level = "Old"
+    ),
+    
+    age.is_young = age %in% c("18 - 24", "25 - 34"),
+    age.is_intermediate = age %in% c("35 - 44", "45 - 54"),
+    age.is_old = age %in% c("55 - 64", "65 or older"),
+
+    # Bin gender
+    gender = gender,
+    gender.binary = fct_collapse(gender,
+                                 "Man" = "Man",
+                                 other_level = "None-Man"
+    ),
+    gender.is_man = gender == "Man",
+    gender.is_woman = gender == "Woman",
+
+    # Bin education
+    education = education,
+    education.binary =  fct_collapse(education,
+                       "College" = c("Associate's Degree", "Bachelor's Degree", "Master's Degree", "Doctorate"),
+                       other_level = "None-col."
+    ),
+    education.is_high_school_or_less = education %in% c("No schooling completed", "Some high school", "High school"),
+    education.is_some_college = education %in% c("Some college", "Trade, technical, or vocational training", "Associate's Degree", "Professional degree"),
+    education.is_college = education %in% c("Bachelor's Degree", "Master's Degree", "Doctorate"),
+
+    # Bin IT background
+    background = background,
+    background.binary = fct_collapse(background,
+                                     "Tech. bg." = c("I have an education in, or work in, the field of computer science, computer engineering or IT."),
+                                     other_level = "None-tech. bg."
+    ),
+    background.is_technical = background == "I have an education in, or work in, the field of computer science, computer engineering or IT."
+  )
+
+```
+
+### Mixed effects remove app regression model.
+
+```{r remove_app_mixed_effects_regression, echo=FALSE}
+removeAppGlmer <- glmer(keep_choice.remove ~
+                    selection.newestApp +
+                    selection.oldestApp +
+                    recall.yes +
+                    aware_prior.yes +
+                    last_use.recent +
+                    access_beneficial.is_yes +
+                    access_concerned.is_yes +
+                    access_change.is_yes +
+                    permissions_count.is_greater_than_median +
+                    days_since_install.is_less_than_three_months +
+                    days_since_install.is_more_than_2_years +
+                    (1 | pid)
+                    , data=regressionData, family = binomial, control = glmerControl(optimizer = "bobyqa"), nAGQ = 100)
+
+summary(removeAppGlmer)
+
+```
+
+##### Mixed effects remove app Variance Inflation Factors (VIFs)
+```{r remove_app_glmer_vif, echo=FALSE}
+# Variance Inflation Factors (VIFs)
+vif(removeAppGlmer)
+```
+
+##### Mixed effects remove app Pseudo R-squared
+```{r remove_app_glmer_r2, echo=FALSE}
+# Pseudo R-squared
+aldrich_nelson_pR2(removeAppGlmer, glm("keep_choice.remove ~ 1" ,data = regressionData))
+```

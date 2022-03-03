@@ -1,0 +1,51 @@
+{
+    "name": "API Survey Assistant Extension",
+    "version": "0.3",
+    "description": "Extension for helping the survey process.",
+    "permissions": [
+        "https://apipriv.seas.gwu.edu/main-survey/*",
+        "http://localhost/main-survey/*",
+        "tabs"
+    ],
+    "background": {
+        "scripts": [
+            "background.js"
+        ]
+    },
+    "content_scripts": [{
+            "js": [
+                "content.js"
+            ],
+            "matches": [
+                "https://apipriv.seas.gwu.edu/main-survey/*",
+                "http://localhost/main-survey/*"
+            ],
+            "run_at": "document_end"
+        },
+        {
+            "js": [
+                "permission-page-content.js"
+            ],
+            "matches": [
+                "https://myaccount.google.com/*permissions*"
+            ],
+            "run_at": "document_end"
+        }
+    ],
+    "browser_action": {
+        "default_icon": {
+            "16": "images/clipboard16.png",
+            "32": "images/clipboard32.png",
+            "48": "images/clipboard48.png",
+            "128": "images/clipboard128.png"
+        },
+        "default_title": "API Survey Assistant"
+    },
+    "icons": {
+        "16": "images/clipboard16.png",
+        "32": "images/clipboard32.png",
+        "48": "images/clipboard48.png",
+        "128": "images/clipboard128.png"
+    },
+    "manifest_version": 2
+}

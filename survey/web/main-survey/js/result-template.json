@@ -1,0 +1,944 @@
+{
+    "informedConsent": {
+        "age": {
+            "confirmation": true
+        },
+        "read": {
+            "confirmation": true
+        },
+        "participation": {
+            "confirmation": true
+        }
+    },
+    "prolificID": "prolificID",
+    "SSOHowSecure": "Strongly disagree",
+    "SSOHowDataUsed": "Strongly disagree",
+    "SSOWhetherDelete": "Strongly disagree",
+    "SSOWhetherTellChange": "Strongly disagree",
+    "SSOWhoElse": "Strongly disagree",
+    "SSOHowOftenReview": "Daily",
+    "TPHowSecure": "Disagree",
+    "TPHowDataUsed": "Disagree",
+    "TPWhetherDelete": "Disagree",
+    "TPWhetherTellChange": "Disagree",
+    "TPWhoElse": "Disagree",
+    "TPWhatPartAccess": "Disagree",
+    "TPHowOftenReview": "Monthly",
+    "AppsAuthMat": [{
+            "appName": "Cisco Webex for Google Calendar",
+            "keep": "Keep"
+        },
+        {
+            "appName": "Lucidchart",
+            "keep": "Remove",
+            "reason": "[comment] No Lucidchart"
+        },
+        {
+            "appName": "UMS Tech Labs India Dial in for Meet",
+            "keep": "Keep"
+        },
+        {
+            "appName": "Zoom for Google Calendar",
+            "keep": "Remove",
+            "reason": "[comment] No Zoom"
+        }
+    ],
+    "oldestApp": {
+        "appName": "Zoom for Google Calendar",
+        "appRecall": "Yes",
+        "appLastUse": "Today",
+        "appAwarePrior": "Yes",
+        "appBeneficialAccess": "Strongly disagree",
+        "appConcernAccess": "Strongly disagree",
+        "appChangeAccess": "Strongly disagree",
+        "appPermNeceConc": [{
+                "permission": "View your email messages when the add-on is running",
+                "necessary": "Not necessary at all",
+                "concern": "Not concerned"
+            },
+            {
+                "permission": "Manage drafts and send emails when you interact with the add-on",
+                "necessary": "Not necessary at all",
+                "concern": "Not concerned"
+            },
+            {
+                "permission": "Run as a Gmail add-on",
+                "necessary": "Not necessary at all",
+                "concern": "Not concerned"
+            },
+            {
+                "permission": "See the events you open in Google Calendar",
+                "necessary": "Not necessary at all",
+                "concern": "Not concerned"
+            },
+            {
+                "permission": "View and edit events on all your calendars",
+                "necessary": "Not necessary at all",
+                "concern": "Not concerned"
+            },
+            {
+                "permission": "Run as a Calendar add-on",
+                "necessary": "Not necessary at all",
+                "concern": "Not concerned"
+            },
+            {
+                "permission": "View your Calendar settings",
+                "necessary": "Not necessary at all",
+                "concern": "Not concerned"
+            },
+            {
+                "permission": "See and download any calendar you can access using your Google Calendar",
+                "necessary": "Not necessary at all",
+                "concern": "Not concerned"
+            },
+            {
+                "permission": "Edit the events you open in Google Calendar",
+                "necessary": "Not necessary at all",
+                "concern": "Not concerned"
+            },
+            {
+                "permission": "View your email address",
+                "necessary": "Not necessary at all",
+                "concern": "Not concerned"
+            },
+            {
+                "permission": "See your personal info, including any personal info you've made publicly available",
+                "necessary": "Not necessary at all",
+                "concern": "Not concerned"
+            },
+            {
+                "permission": "Connect to an external service",
+                "necessary": "Not necessary at all",
+                "concern": "Not concerned"
+            },
+            {
+                "permission": "Allow this application to run when you are not present",
+                "necessary": "Not necessary at all",
+                "concern": "Not concerned"
+            }
+        ],
+        "appDescribeConcern": "[comment] No concern about Zoom"
+    },
+    "newestApp": {
+        "appName": "UMS Tech Labs India Dial in for Meet",
+        "appRecall": "No",
+        "appLastUse": "In the last week",
+        "appAwarePrior": "No",
+        "appBeneficialAccess": "Disagree",
+        "appConcernAccess": "Disagree",
+        "appChangeAccess": "Disagree",
+        "appPermNeceConc": [{
+                "permission": "Run as a Gmail add-on",
+                "necessary": "Neither necessary nor unnecessary",
+                "concern": "concerned"
+            },
+            {
+                "permission": "See, edit, share, and permanently delete all the calendars you can access using Google Calendar",
+                "necessary": "Neither necessary nor unnecessary",
+                "concern": "concerned"
+            },
+            {
+                "permission": "See the events you open in Google Calendar",
+                "necessary": "Neither necessary nor unnecessary",
+                "concern": "concerned"
+            },
+            {
+                "permission": "Run as a Calendar add-on",
+                "necessary": "Neither necessary nor unnecessary",
+                "concern": "concerned"
+            },
+            {
+                "permission": "Edit the events you open in Google Calendar",
+                "necessary": "Neither necessary nor unnecessary",
+                "concern": "concerned"
+            },
+            {
+                "permission": "See, edit, create, and delete your spreadsheets in Google Drive",
+                "necessary": "Neither necessary nor unnecessary",
+                "concern": "concerned"
+            },
+            {
+                "permission": "View your email address",
+                "necessary": "Neither necessary nor unnecessary",
+                "concern": "concerned"
+            },
+            {
+                "permission": "See your personal info, including any personal info you've made publicly available",
+                "necessary": "Neither necessary nor unnecessary",
+                "concern": "concerned"
+            },
+            {
+                "permission": "Connect to an external service",
+                "necessary": "Neither necessary nor unnecessary",
+                "concern": "concerned"
+            }
+        ],
+        "appDescribeConcern": "[comment] No concern about UMS"
+    },
+    "randomApp": {
+        "appName": "Lucidchart",
+        "appRecall": "Unsure",
+        "appLastUse": "In the last month",
+        "appAwarePrior": "Unsure",
+        "appBeneficialAccess": "Neither agree nor disagree",
+        "appConcernAccess": "Neither agree nor disagree",
+        "appChangeAccess": "Neither agree nor disagree",
+        "appPermNeceConc": [{
+                "permission": "View and manage documents that this application has been installed in",
+                "necessary": "Necessary",
+                "concern": "Very concerned"
+            },
+            {
+                "permission": "View and manage the Google Slides presentations that this application is installed in",
+                "necessary": "Necessary",
+                "concern": "Very concerned"
+            },
+            {
+                "permission": "View and manage spreadsheets that this application has been installed in",
+                "necessary": "Necessary",
+                "concern": "Very concerned"
+            },
+            {
+                "permission": "View and manage Google Drive files and folders that you have opened or created with this app",
+                "necessary": "Necessary",
+                "concern": "Very concerned"
+            },
+            {
+                "permission": "View users on your domain",
+                "necessary": "Necessary",
+                "concern": "Very concerned"
+            },
+            {
+                "permission": "View groups on your domain",
+                "necessary": "Necessary",
+                "concern": "Very concerned"
+            },
+            {
+                "permission": "View organization units on your domain",
+                "necessary": "Necessary",
+                "concern": "Very concerned"
+            },
+            {
+                "permission": "View your email address",
+                "necessary": "Necessary",
+                "concern": "Very concerned"
+            },
+            {
+                "permission": "See your personal info, including any personal info you've made publicly available",
+                "necessary": "Necessary",
+                "concern": "Very concerned"
+            },
+            {
+                "permission": "Connect to an external service",
+                "necessary": "Necessary",
+                "concern": "Very concerned"
+            },
+            {
+                "permission": "View and manage data associated with the application",
+                "necessary": "Necessary",
+                "concern": "Very concerned"
+            },
+            {
+                "permission": "Display and run third-party web content in prompts and sidebars inside Google applications",
+                "necessary": "Necessary",
+                "concern": "Very concerned"
+            }
+        ],
+        "appDescribeConcern": "[comment] No concern about Lucidchart"
+    },
+    "BetterUnderstandLink": "Strongly disagree",
+    "BetterUnderstandAccess": "Disagree",
+    "ChangeSettings": "Yes",
+    "SixMonthReview": "Yes",
+    "OftenRemind": "Once a month",
+    "OftenReapprove": "Once every three years",
+    "SeekApproval": "Agree",
+    "BlockSpecificData": "Agree",
+    "ChangeSettingsWhich": "[comment] A lot of changes",
+    "SixMonthLookFor": "[comment] Nothing particular",
+    "AddFeatures": "[comment] A lot of features",
+    "isSignedIn": "true",
+    "SSOEmailAddress": "unsc117mchief@gmail.com",
+    "NumSSOApps": 6,
+    "NumTPApps": 4,
+    "extentionData": {
+        "ssodata": [{
+                "appName": "Cisco Webex for Google Calendar",
+                "appIcon": "https://images-lso-opensocial.googleusercontent.com/gadgets/proxy?url=https://lh3.googleusercontent.com/q97ACdCZnI6vUPSE0rbRH1mW540u5tPJh0IMyBpjJr5O742FY_nbrIdTijuEvlmNRew&container=lso&gadget=a&rewriteMime=image/*&resize_h=120&resize_w=120&no_expand=1&fallback_url=https://www.gstatic.com/identity/boq/accountsettingspermissions/images/default_app_icon_120x120-6ede23971db41e0f65dbde7095b11aec.png",
+                "appInstallTimestamp": 1611779379000,
+                "appHomepage": "https://www.webex.com",
+                "appPermissions": [{
+                        "appPermissionTitle": "Gmail",
+                        "appPermissionDetail": [
+                            [
+                                "Manage drafts and send emails when you interact with the add-on",
+                                12
+                            ],
+                            [
+                                "Run as a Gmail add-on",
+                                12
+                            ],
+                            [
+                                "View your email message metadata when the add-on is running",
+                                12
+                            ]
+                        ],
+                        "appPermissionIcon": "https://www.google.com/images/icons/product/googlemail-32.png"
+                    },
+                    {
+                        "appPermissionTitle": "Google Calendar",
+                        "appPermissionDetail": [
+                            [
+                                "Edit the events you open in Google Calendar",
+                                46
+                            ],
+                            [
+                                "View and edit events on all your calendars",
+                                46
+                            ],
+                            [
+                                "View your Calendar settings",
+                                46
+                            ],
+                            [
+                                "See the events you open in Google Calendar",
+                                46
+                            ],
+                            [
+                                "Run as a Calendar add-on",
+                                46
+                            ]
+                        ],
+                        "appPermissionIcon": "https://www.google.com/images/icons/product/calendar-32.png"
+                    },
+                    {
+                        "appPermissionTitle": "Google Services",
+                        "appPermissionDetail": [
+                            [
+                                "View users on your domain",
+                                102
+                            ]
+                        ],
+                        "appPermissionIcon": null
+                    },
+                    {
+                        "appPermissionTitle": "Basic account info",
+                        "appPermissionDetail": [
+                            [
+                                "View your email address", -2
+                            ],
+                            [
+                                "See your personal info, including any personal info you've made publicly available", -2
+                            ]
+                        ],
+                        "appPermissionIcon": null
+                    },
+                    {
+                        "appPermissionTitle": "Additional access",
+                        "appPermissionDetail": [
+                            [
+                                "Allow this application to run when you are not present", -1
+                            ],
+                            [
+                                "View your country, language, and timezone", -1
+                            ],
+                            [
+                                "View and manage data associated with the application", -1
+                            ],
+                            [
+                                "Connect to an external service", -1
+                            ]
+                        ],
+                        "appPermissionIcon": null
+                    }
+                ]
+            },
+            {
+                "appName": "Lucidchart",
+                "appIcon": "https://images-lso-opensocial.googleusercontent.com/gadgets/proxy?url=https://lh3.googleusercontent.com/QBIiuaRLxLlRwqO-IxG8y9N9VMtQ8Ep4UOErsr3aRw0Kji_xj80TJ4MpgnxgT-EUNAA&container=lso&gadget=a&rewriteMime=image/*&resize_h=120&resize_w=120&no_expand=1&fallback_url=https://www.gstatic.com/identity/boq/accountsettingspermissions/images/default_app_icon_120x120-6ede23971db41e0f65dbde7095b11aec.png",
+                "appInstallTimestamp": 1611779071000,
+                "appHomepage": "https://www.lucidchart.com",
+                "appPermissions": [{
+                        "appPermissionTitle": "Google Docs",
+                        "appPermissionDetail": [
+                            [
+                                "View and manage documents that this application has been installed in",
+                                55
+                            ],
+                            [
+                                "View and manage the Google Slides presentations that this application is installed in",
+                                55
+                            ],
+                            [
+                                "View and manage spreadsheets that this application has been installed in",
+                                55
+                            ]
+                        ],
+                        "appPermissionIcon": "https://www.google.com/images/icons/product/docs-32.png"
+                    },
+                    {
+                        "appPermissionTitle": "Google Drive",
+                        "appPermissionDetail": [
+                            [
+                                "View and manage Google Drive files and folders that you have opened or created with this app",
+                                75
+                            ]
+                        ],
+                        "appPermissionIcon": "https://ssl.gstatic.com/docs/doclist/images/drive_icon_32.png"
+                    },
+                    {
+                        "appPermissionTitle": "Google Services",
+                        "appPermissionDetail": [
+                            [
+                                "View users on your domain",
+                                102
+                            ],
+                            [
+                                "View groups on your domain",
+                                102
+                            ],
+                            [
+                                "View organization units on your domain",
+                                102
+                            ]
+                        ],
+                        "appPermissionIcon": null
+                    },
+                    {
+                        "appPermissionTitle": "Basic account info",
+                        "appPermissionDetail": [
+                            [
+                                "View your email address", -2
+                            ],
+                            [
+                                "See your personal info, including any personal info you've made publicly available", -2
+                            ]
+                        ],
+                        "appPermissionIcon": null
+                    },
+                    {
+                        "appPermissionTitle": "Additional access",
+                        "appPermissionDetail": [
+                            [
+                                "Connect to an external service", -1
+                            ],
+                            [
+                                "View and manage data associated with the application", -1
+                            ],
+                            [
+                                "Display and run third-party web content in prompts and sidebars inside Google applications", -1
+                            ]
+                        ],
+                        "appPermissionIcon": null
+                    }
+                ]
+            },
+            {
+                "appName": "UMS Tech Labs India Dial in for Meet",
+                "appIcon": "https://images-lso-opensocial.googleusercontent.com/gadgets/proxy?url=https://lh3.googleusercontent.com/-qKCABfdVSHnG44vN1fcbpKxAhyzve3I0Xn2PBYSwKPIsLQwDKeFP4uGE0jy-TKkjg&container=lso&gadget=a&rewriteMime=image/*&resize_h=120&resize_w=120&no_expand=1&fallback_url=https://www.gstatic.com/identity/boq/accountsettingspermissions/images/default_app_icon_120x120-6ede23971db41e0f65dbde7095b11aec.png",
+                "appInstallTimestamp": 1611855981000,
+                "appHomepage": "https://umstechlabs.com",
+                "appPermissions": [{
+                        "appPermissionTitle": "Gmail",
+                        "appPermissionDetail": [
+                            [
+                                "Run as a Gmail add-on",
+                                12
+                            ]
+                        ],
+                        "appPermissionIcon": "https://www.google.com/images/icons/product/googlemail-32.png"
+                    },
+                    {
+                        "appPermissionTitle": "Google Calendar",
+                        "appPermissionDetail": [
+                            [
+                                "See, edit, share, and permanently delete all the calendars you can access using Google Calendar",
+                                46
+                            ],
+                            [
+                                "See the events you open in Google Calendar",
+                                46
+                            ],
+                            [
+                                "Run as a Calendar add-on",
+                                46
+                            ],
+                            [
+                                "Edit the events you open in Google Calendar",
+                                46
+                            ]
+                        ],
+                        "appPermissionIcon": "https://www.google.com/images/icons/product/calendar-32.png"
+                    },
+                    {
+                        "appPermissionTitle": "Google Docs",
+                        "appPermissionDetail": [
+                            [
+                                "See, edit, create, and delete your spreadsheets in Google Drive",
+                                55
+                            ]
+                        ],
+                        "appPermissionIcon": "https://www.google.com/images/icons/product/docs-32.png"
+                    },
+                    {
+                        "appPermissionTitle": "Basic account info",
+                        "appPermissionDetail": [
+                            [
+                                "View your email address", -2
+                            ],
+                            [
+                                "See your personal info, including any personal info you've made publicly available", -2
+                            ]
+                        ],
+                        "appPermissionIcon": null
+                    },
+                    {
+                        "appPermissionTitle": "Additional access",
+                        "appPermissionDetail": [
+                            [
+                                "Connect to an external service", -1
+                            ]
+                        ],
+                        "appPermissionIcon": null
+                    }
+                ]
+            },
+            {
+                "appName": "Zoom for Google Calendar",
+                "appIcon": "https://images-lso-opensocial.googleusercontent.com/gadgets/proxy?url=https://lh3.googleusercontent.com/3GpyTeAz8v7zYcJlzFSAowOTI5Z2AhFUgCtZILIwY-5zFrz_USV2Wzwl4Kk0E8jrb_g&container=lso&gadget=a&rewriteMime=image/*&resize_h=120&resize_w=120&no_expand=1&fallback_url=https://www.gstatic.com/identity/boq/accountsettingspermissions/images/default_app_icon_120x120-6ede23971db41e0f65dbde7095b11aec.png",
+                "appInstallTimestamp": 1608230510000,
+                "appHomepage": "https://zoom.us",
+                "appPermissions": [{
+                        "appPermissionTitle": "Gmail",
+                        "appPermissionDetail": [
+                            [
+                                "View your email messages when the add-on is running",
+                                12
+                            ],
+                            [
+                                "Manage drafts and send emails when you interact with the add-on",
+                                12
+                            ],
+                            [
+                                "Run as a Gmail add-on",
+                                12
+                            ]
+                        ],
+                        "appPermissionIcon": "https://www.google.com/images/icons/product/googlemail-32.png"
+                    },
+                    {
+                        "appPermissionTitle": "Google Calendar",
+                        "appPermissionDetail": [
+                            [
+                                "See the events you open in Google Calendar",
+                                46
+                            ],
+                            [
+                                "View and edit events on all your calendars",
+                                46
+                            ],
+                            [
+                                "Run as a Calendar add-on",
+                                46
+                            ],
+                            [
+                                "View your Calendar settings",
+                                46
+                            ],
+                            [
+                                "See and download any calendar you can access using your Google Calendar",
+                                46
+                            ],
+                            [
+                                "Edit the events you open in Google Calendar",
+                                46
+                            ]
+                        ],
+                        "appPermissionIcon": "https://www.google.com/images/icons/product/calendar-32.png"
+                    },
+                    {
+                        "appPermissionTitle": "Basic account info",
+                        "appPermissionDetail": [
+                            [
+                                "View your email address", -2
+                            ],
+                            [
+                                "See your personal info, including any personal info you've made publicly available", -2
+                            ]
+                        ],
+                        "appPermissionIcon": null
+                    },
+                    {
+                        "appPermissionTitle": "Additional access",
+                        "appPermissionDetail": [
+                            [
+                                "Connect to an external service", -1
+                            ],
+                            [
+                                "Allow this application to run when you are not present", -1
+                            ]
+                        ],
+                        "appPermissionIcon": null
+                    }
+                ]
+            },
+            {
+                "appName": "api-privacy",
+                "appIcon": "https://www.gstatic.com/identity/boq/accountsettingspermissions/images/default_app_icon_120x120-6ede23971db41e0f65dbde7095b11aec.png",
+                "appInstallTimestamp": 1611521445000,
+                "appHomepage": "https://apipriv.seas.gwu.edu",
+                "appPermissions": [{
+                    "appPermissionTitle": "Basic account info",
+                    "appPermissionDetail": [
+                        [
+                            "View your email address", -2
+                        ],
+                        [
+                            "See your personal info, including any personal info you've made publicly available", -2
+                        ]
+                    ],
+                    "appPermissionIcon": null
+                }]
+            },
+            {
+                "appName": "StudyBlue",
+                "appIcon": "https://www.gstatic.com/identity/boq/accountsettingspermissions/images/default_app_icon_120x120-6ede23971db41e0f65dbde7095b11aec.png",
+                "appInstallTimestamp": 1599241711000,
+                "appHomepage": "https://www.studyblue.com",
+                "appPermissions": [{
+                    "appPermissionTitle": "Basic account info",
+                    "appPermissionDetail": [
+                        [
+                            "View your email address", -2
+                        ],
+                        [
+                            "See your personal info, including any personal info you've made publicly available", -2
+                        ]
+                    ],
+                    "appPermissionIcon": null
+                }]
+            }
+        ],
+        "tpdata": [{
+                "appName": "Cisco Webex for Google Calendar",
+                "appIcon": "https://images-lso-opensocial.googleusercontent.com/gadgets/proxy?url=https://lh3.googleusercontent.com/q97ACdCZnI6vUPSE0rbRH1mW540u5tPJh0IMyBpjJr5O742FY_nbrIdTijuEvlmNRew&container=lso&gadget=a&rewriteMime=image/*&resize_h=120&resize_w=120&no_expand=1&fallback_url=https://www.gstatic.com/identity/boq/accountsettingspermissions/images/default_app_icon_120x120-6ede23971db41e0f65dbde7095b11aec.png",
+                "appInstallTimestamp": 1611779379000,
+                "appHomepage": "https://www.webex.com",
+                "appPermissions": [{
+                        "appPermissionTitle": "Gmail",
+                        "appPermissionDetail": [
+                            [
+                                "Manage drafts and send emails when you interact with the add-on",
+                                12
+                            ],
+                            [
+                                "Run as a Gmail add-on",
+                                12
+                            ],
+                            [
+                                "View your email message metadata when the add-on is running",
+                                12
+                            ]
+                        ],
+                        "appPermissionIcon": "https://www.google.com/images/icons/product/googlemail-32.png"
+                    },
+                    {
+                        "appPermissionTitle": "Google Calendar",
+                        "appPermissionDetail": [
+                            [
+                                "Edit the events you open in Google Calendar",
+                                46
+                            ],
+                            [
+                                "View and edit events on all your calendars",
+                                46
+                            ],
+                            [
+                                "View your Calendar settings",
+                                46
+                            ],
+                            [
+                                "See the events you open in Google Calendar",
+                                46
+                            ],
+                            [
+                                "Run as a Calendar add-on",
+                                46
+                            ]
+                        ],
+                        "appPermissionIcon": "https://www.google.com/images/icons/product/calendar-32.png"
+                    },
+                    {
+                        "appPermissionTitle": "Google Services",
+                        "appPermissionDetail": [
+                            [
+                                "View users on your domain",
+                                102
+                            ]
+                        ],
+                        "appPermissionIcon": null
+                    },
+                    {
+                        "appPermissionTitle": "Basic account info",
+                        "appPermissionDetail": [
+                            [
+                                "View your email address", -2
+                            ],
+                            [
+                                "See your personal info, including any personal info you've made publicly available", -2
+                            ]
+                        ],
+                        "appPermissionIcon": null
+                    },
+                    {
+                        "appPermissionTitle": "Additional access",
+                        "appPermissionDetail": [
+                            [
+                                "Allow this application to run when you are not present", -1
+                            ],
+                            [
+                                "View your country, language, and timezone", -1
+                            ],
+                            [
+                                "View and manage data associated with the application", -1
+                            ],
+                            [
+                                "Connect to an external service", -1
+                            ]
+                        ],
+                        "appPermissionIcon": null
+                    }
+                ]
+            },
+            {
+                "appName": "Lucidchart",
+                "appIcon": "https://images-lso-opensocial.googleusercontent.com/gadgets/proxy?url=https://lh3.googleusercontent.com/QBIiuaRLxLlRwqO-IxG8y9N9VMtQ8Ep4UOErsr3aRw0Kji_xj80TJ4MpgnxgT-EUNAA&container=lso&gadget=a&rewriteMime=image/*&resize_h=120&resize_w=120&no_expand=1&fallback_url=https://www.gstatic.com/identity/boq/accountsettingspermissions/images/default_app_icon_120x120-6ede23971db41e0f65dbde7095b11aec.png",
+                "appInstallTimestamp": 1611779071000,
+                "appHomepage": "https://www.lucidchart.com",
+                "appPermissions": [{
+                        "appPermissionTitle": "Google Docs",
+                        "appPermissionDetail": [
+                            [
+                                "View and manage documents that this application has been installed in",
+                                55
+                            ],
+                            [
+                                "View and manage the Google Slides presentations that this application is installed in",
+                                55
+                            ],
+                            [
+                                "View and manage spreadsheets that this application has been installed in",
+                                55
+                            ]
+                        ],
+                        "appPermissionIcon": "https://www.google.com/images/icons/product/docs-32.png"
+                    },
+                    {
+                        "appPermissionTitle": "Google Drive",
+                        "appPermissionDetail": [
+                            [
+                                "View and manage Google Drive files and folders that you have opened or created with this app",
+                                75
+                            ]
+                        ],
+                        "appPermissionIcon": "https://ssl.gstatic.com/docs/doclist/images/drive_icon_32.png"
+                    },
+                    {
+                        "appPermissionTitle": "Google Services",
+                        "appPermissionDetail": [
+                            [
+                                "View users on your domain",
+                                102
+                            ],
+                            [
+                                "View groups on your domain",
+                                102
+                            ],
+                            [
+                                "View organization units on your domain",
+                                102
+                            ]
+                        ],
+                        "appPermissionIcon": null
+                    },
+                    {
+                        "appPermissionTitle": "Basic account info",
+                        "appPermissionDetail": [
+                            [
+                                "View your email address", -2
+                            ],
+                            [
+                                "See your personal info, including any personal info you've made publicly available", -2
+                            ]
+                        ],
+                        "appPermissionIcon": null
+                    },
+                    {
+                        "appPermissionTitle": "Additional access",
+                        "appPermissionDetail": [
+                            [
+                                "Connect to an external service", -1
+                            ],
+                            [
+                                "View and manage data associated with the application", -1
+                            ],
+                            [
+                                "Display and run third-party web content in prompts and sidebars inside Google applications", -1
+                            ]
+                        ],
+                        "appPermissionIcon": null
+                    }
+                ]
+            },
+            {
+                "appName": "UMS Tech Labs India Dial in for Meet",
+                "appIcon": "https://images-lso-opensocial.googleusercontent.com/gadgets/proxy?url=https://lh3.googleusercontent.com/-qKCABfdVSHnG44vN1fcbpKxAhyzve3I0Xn2PBYSwKPIsLQwDKeFP4uGE0jy-TKkjg&container=lso&gadget=a&rewriteMime=image/*&resize_h=120&resize_w=120&no_expand=1&fallback_url=https://www.gstatic.com/identity/boq/accountsettingspermissions/images/default_app_icon_120x120-6ede23971db41e0f65dbde7095b11aec.png",
+                "appInstallTimestamp": 1611855981000,
+                "appHomepage": "https://umstechlabs.com",
+                "appPermissions": [{
+                        "appPermissionTitle": "Gmail",
+                        "appPermissionDetail": [
+                            [
+                                "Run as a Gmail add-on",
+                                12
+                            ]
+                        ],
+                        "appPermissionIcon": "https://www.google.com/images/icons/product/googlemail-32.png"
+                    },
+                    {
+                        "appPermissionTitle": "Google Calendar",
+                        "appPermissionDetail": [
+                            [
+                                "See, edit, share, and permanently delete all the calendars you can access using Google Calendar",
+                                46
+                            ],
+                            [
+                                "See the events you open in Google Calendar",
+                                46
+                            ],
+                            [
+                                "Run as a Calendar add-on",
+                                46
+                            ],
+                            [
+                                "Edit the events you open in Google Calendar",
+                                46
+                            ]
+                        ],
+                        "appPermissionIcon": "https://www.google.com/images/icons/product/calendar-32.png"
+                    },
+                    {
+                        "appPermissionTitle": "Google Docs",
+                        "appPermissionDetail": [
+                            [
+                                "See, edit, create, and delete your spreadsheets in Google Drive",
+                                55
+                            ]
+                        ],
+                        "appPermissionIcon": "https://www.google.com/images/icons/product/docs-32.png"
+                    },
+                    {
+                        "appPermissionTitle": "Basic account info",
+                        "appPermissionDetail": [
+                            [
+                                "View your email address", -2
+                            ],
+                            [
+                                "See your personal info, including any personal info you've made publicly available", -2
+                            ]
+                        ],
+                        "appPermissionIcon": null
+                    },
+                    {
+                        "appPermissionTitle": "Additional access",
+                        "appPermissionDetail": [
+                            [
+                                "Connect to an external service", -1
+                            ]
+                        ],
+                        "appPermissionIcon": null
+                    }
+                ]
+            },
+            {
+                "appName": "Zoom for Google Calendar",
+                "appIcon": "https://images-lso-opensocial.googleusercontent.com/gadgets/proxy?url=https://lh3.googleusercontent.com/3GpyTeAz8v7zYcJlzFSAowOTI5Z2AhFUgCtZILIwY-5zFrz_USV2Wzwl4Kk0E8jrb_g&container=lso&gadget=a&rewriteMime=image/*&resize_h=120&resize_w=120&no_expand=1&fallback_url=https://www.gstatic.com/identity/boq/accountsettingspermissions/images/default_app_icon_120x120-6ede23971db41e0f65dbde7095b11aec.png",
+                "appInstallTimestamp": 1608230510000,
+                "appHomepage": "https://zoom.us",
+                "appPermissions": [{
+                        "appPermissionTitle": "Gmail",
+                        "appPermissionDetail": [
+                            [
+                                "View your email messages when the add-on is running",
+                                12
+                            ],
+                            [
+                                "Manage drafts and send emails when you interact with the add-on",
+                                12
+                            ],
+                            [
+                                "Run as a Gmail add-on",
+                                12
+                            ]
+                        ],
+                        "appPermissionIcon": "https://www.google.com/images/icons/product/googlemail-32.png"
+                    },
+                    {
+                        "appPermissionTitle": "Google Calendar",
+                        "appPermissionDetail": [
+                            [
+                                "See the events you open in Google Calendar",
+                                46
+                            ],
+                            [
+                                "View and edit events on all your calendars",
+                                46
+                            ],
+                            [
+                                "Run as a Calendar add-on",
+                                46
+                            ],
+                            [
+                                "View your Calendar settings",
+                                46
+                            ],
+                            [
+                                "See and download any calendar you can access using your Google Calendar",
+                                46
+                            ],
+                            [
+                                "Edit the events you open in Google Calendar",
+                                46
+                            ]
+                        ],
+                        "appPermissionIcon": "https://www.google.com/images/icons/product/calendar-32.png"
+                    },
+                    {
+                        "appPermissionTitle": "Basic account info",
+                        "appPermissionDetail": [
+                            [
+                                "View your email address", -2
+                            ],
+                            [
+                                "See your personal info, including any personal info you've made publicly available", -2
+                            ]
+                        ],
+                        "appPermissionIcon": null
+                    },
+                    {
+                        "appPermissionTitle": "Additional access",
+                        "appPermissionDetail": [
+                            [
+                                "Connect to an external service", -1
+                            ],
+                            [
+                                "Allow this application to run when you are not present", -1
+                            ]
+                        ],
+                        "appPermissionIcon": null
+                    }
+                ]
+            }
+        ]
+    }
+}

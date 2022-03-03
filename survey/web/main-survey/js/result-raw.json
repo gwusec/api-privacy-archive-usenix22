@@ -1,0 +1,178 @@
+{
+    "informedConsent": {
+        "age": {
+            "confirmation": true
+        },
+        "read": {
+            "confirmation": true
+        },
+        "participation": {
+            "confirmation": true
+        }
+    },
+    "launchMyAccountButton": "false",
+    "launchMyAccountTimer": "true",
+    "launchMyAccountProceed": "true",
+    "SSOConsiderations": {
+        "SSOHowSecure": "Strongly disagree",
+        "SSOHowDataUsed": "Strongly disagree",
+        "SSOWhetherDelete": "Strongly disagree",
+        "SSOWhetherTellChange": "Strongly disagree",
+        "SSOWhoElse": "Strongly disagree"
+    },
+    "SSOHowOftenReview": "Weekly",
+    "TPConsiderations": {
+        "TPHowSecure": "Disagree",
+        "TPHowDataUsed": "Disagree",
+        "TPWhetherDelete": "Disagree",
+        "TPWhetherTellChange": "Disagree",
+        "TPWhoElse": "Disagree",
+        "TPWhatPartAccess": "Disagree"
+    },
+    "TPHowOftenReview": "Rarely",
+    "AppsAuthorizedMatrix": {
+        "Cisco Webex for Google Calendar": "Keep",
+        "Lucidchart": "Remove",
+        "UMS Tech Labs India Dial in for Meet": "Keep",
+        "Zoom for Google Calendar": "Remove"
+    },
+    "OldestappRecall": "Yes",
+    "OldestappLastUse": "Today",
+    "OldestappAwarePrior": "Yes",
+    "OldestappAgreeMat": {
+        "It's beneficial to me for {OldestappName} to have access to my Google account.": "Strongly disagree",
+        "I'm concerned with {OldestappName} having access to my Google account.": "Strongly disagree",
+        "I want to change which parts of my Google account that {OldestappName} can access.": "Strongly disagree"
+    },
+    "OldestappPermNece": {
+        "View your email messages when the add-on is running": "Not necessary at all",
+        "Run as a Gmail add-on": "Not necessary at all",
+        "Manage drafts and send emails when you interact with the add-on": "Not necessary at all",
+        "View your Calendar settings": "Not necessary at all",
+        "Run as a Calendar add-on": "Not necessary at all",
+        "View and edit events on all your calendars": "Not necessary at all",
+        "See the events you open in Google Calendar": "Not necessary at all",
+        "Edit the events you open in Google Calendar": "Not necessary at all",
+        "See and download any calendar you can access using your Google Calendar": "Not necessary at all",
+        "See your personal info, including any personal info you've made publicly available": "Not necessary at all",
+        "View your email address": "Not necessary at all",
+        "Allow this application to run when you are not present": "Not necessary at all",
+        "Connect to an external service": "Not necessary at all"
+    },
+    "OldestappPermConc": {
+        "View your email messages when the add-on is running": "Not concerned",
+        "Run as a Gmail add-on": "Not concerned",
+        "Manage drafts and send emails when you interact with the add-on": "Not concerned",
+        "View your Calendar settings": "Not concerned",
+        "Run as a Calendar add-on": "Not concerned",
+        "View and edit events on all your calendars": "Not concerned",
+        "See the events you open in Google Calendar": "Not concerned",
+        "Edit the events you open in Google Calendar": "Not concerned",
+        "See and download any calendar you can access using your Google Calendar": "Not concerned",
+        "See your personal info, including any personal info you've made publicly available": "Not concerned",
+        "View your email address": "Not concerned",
+        "Allow this application to run when you are not present": "Not concerned",
+        "Connect to an external service": "Not concerned"
+    },
+    "OldestappDescribeConcern": "No concern for Zoom, oldest app",
+    "NewestappRecall": "No",
+    "NewestappLastUse": "In the last week",
+    "NewestappAwarePrior": "Unsure",
+    "NewestappAgreeMat": {
+        "It's beneficial to me for {NewestappName} to have access to my Google account.": "Disagree",
+        "I'm concerned with {NewestappName} having access to my Google account.": "Disagree",
+        "I want to change which parts of my Google account that {NewestappName} can access.": "Disagree"
+    },
+    "NewestappPermNece": {
+        "Run as a Gmail add-on": "Not necessary",
+        "Run as a Calendar add-on": "Not necessary",
+        "See the events you open in Google Calendar": "Not necessary",
+        "See, edit, share, and permanently delete all the calendars you can access using Google Calendar": "Not necessary",
+        "Edit the events you open in Google Calendar": "Not necessary",
+        "See, edit, create, and delete your spreadsheets in Google Drive": "Not necessary",
+        "See your personal info, including any personal info you've made publicly available": "Not necessary",
+        "View your email address": "Not necessary",
+        "Connect to an external service": "Not necessary"
+    },
+    "NewestappPermConc": {
+        "Run as a Gmail add-on": "Neither concerned nor unconcerned",
+        "Run as a Calendar add-on": "Neither concerned nor unconcerned",
+        "See the events you open in Google Calendar": "Neither concerned nor unconcerned",
+        "See, edit, share, and permanently delete all the calendars you can access using Google Calendar": "Neither concerned nor unconcerned",
+        "Edit the events you open in Google Calendar": "Neither concerned nor unconcerned",
+        "See, edit, create, and delete your spreadsheets in Google Drive": "Neither concerned nor unconcerned",
+        "See your personal info, including any personal info you've made publicly available": "Neither concerned nor unconcerned",
+        "View your email address": "Neither concerned nor unconcerned",
+        "Connect to an external service": "Neither concerned nor unconcerned"
+    },
+    "NewestappDescribeConcern": "No concern for UMS, newest app",
+    "RandomappRecall": "No",
+    "RandomappLastUse": "In the last year",
+    "RandomappAwarePrior": "Yes",
+    "RandomappAgreeMat": {
+        "It's beneficial to me for {RandomappName} to have access to my Google account.": "Neither agree nor disagree",
+        "I'm concerned with {RandomappName} having access to my Google account.": "Neither agree nor disagree",
+        "I want to change which parts of my Google account that {RandomappName} can access.": "Neither agree nor disagree"
+    },
+    "RandomappPermNece": {
+        "Manage drafts and send emails when you interact with the add-on": "Neither necessary nor unnecessary",
+        "View your email message metadata when the add-on is running": "Neither necessary nor unnecessary",
+        "Run as a Gmail add-on": "Neither necessary nor unnecessary",
+        "View and edit events on all your calendars": "Neither necessary nor unnecessary",
+        "Edit the events you open in Google Calendar": "Neither necessary nor unnecessary",
+        "See the events you open in Google Calendar": "Neither necessary nor unnecessary",
+        "Run as a Calendar add-on": "Neither necessary nor unnecessary",
+        "View your Calendar settings": "Neither necessary nor unnecessary",
+        "View users on your domain": "Neither necessary nor unnecessary",
+        "View your email address": "Neither necessary nor unnecessary",
+        "See your personal info, including any personal info you've made publicly available": "Neither necessary nor unnecessary",
+        "Allow this application to run when you are not present": "Neither necessary nor unnecessary",
+        "View and manage data associated with the application": "Neither necessary nor unnecessary",
+        "View your country, language, and timezone": "Neither necessary nor unnecessary",
+        "Connect to an external service": "Neither necessary nor unnecessary"
+    },
+    "RandomappPermConc": {
+        "Manage drafts and send emails when you interact with the add-on": "concerned",
+        "View your email message metadata when the add-on is running": "concerned",
+        "Run as a Gmail add-on": "concerned",
+        "View and edit events on all your calendars": "concerned",
+        "Edit the events you open in Google Calendar": "concerned",
+        "See the events you open in Google Calendar": "concerned",
+        "Run as a Calendar add-on": "concerned",
+        "View your Calendar settings": "concerned",
+        "View users on your domain": "concerned",
+        "View your email address": "concerned",
+        "See your personal info, including any personal info you've made publicly available": "concerned",
+        "Allow this application to run when you are not present": "concerned",
+        "View and manage data associated with the application": "concerned",
+        "View your country, language, and timezone": "concerned",
+        "Connect to an external service": "concerned"
+    },
+    "RandomappDescribeConcern": "No concern for Cisco, random app",
+    "BetterUnderstandLink": "Strongly disagree",
+    "BetterUnderstandAccess": "Disagree",
+    "ChangeSettings": "Yes",
+    "SixMonthReview": "Yes",
+    "ChangeSettingsWhich": "Do not want to change any settings",
+    "SixMonthLookFor": "Did they have more access after six months",
+    "AddFeatures": "Add a lot of features",
+    "OftenRemind": "Once a week",
+    "OftenReapprove": "Once a month",
+    "SeekApproval": "Disagree",
+    "BlockSpecificData": "Disagree",
+    "isSignedIn": "true",
+    "SSOEmailAddress": "unsc117mchief@gmail.com",
+    "NumSSOApps": 6,
+    "OldestPageVisible": "true",
+    "RecallThirdPartyAuthPageVisible": "true",
+    "NewestPageVisible": "true",
+    "RandomPageVisible": "true",
+    "NumTPApps": 4,
+    "OldestappName": "Zoom for Google Calendar",
+    "NewestappName": "UMS Tech Labs India Dial in for Meet",
+    "RandomappName": "Cisco Webex for Google Calendar",
+    "RemoveLucidchartComment": "No Lucidchar",
+    "RemoveZoom for Google CalendarComment": "No Zoom",
+    "timestamp": "2021-1-31 19:25:1",
+    "uuid": ""
+}
